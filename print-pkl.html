@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phiếu Lấy Hàng & In Tem</title>
+    <link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* CSS cho màn hình thường */
+        body { background-color: #f0f2f5; font-family: 'Times New Roman', Times, serif; }
+        
+        /* Khu vực phiếu A4 */
+        #printable-area { width: 210mm; min-height: 297mm; padding: 15mm; margin: 10mm auto; border: 1px #D1D1D1 solid; background: white; box-shadow: 0 0 5px rgba(0, 0, 0, 0.1); }
+        table { font-size: 10px; }
+        th, td { padding: 4px; }
+
+        /* Khu vực Tem (mặc định ẩn trên màn hình) */
+        #label-area { display: none; width: 80mm; margin: 0 auto; background: white; padding: 10px; }
+        
+        /* Thiết kế Tem SP (Tem nhỏ) */
+        .label-item {
+            width: 70mm; 
+            padding: 6px; 
+            margin-bottom: 5mm; 
+            /* Chuyển sang Tahoma theo yêu cầu */
+            font-family: Tahoma, sans-serif; 
+            page-break-inside: avoid; 
+            break-inside: avoid;
+            display: block;
+            background: white;
+            box-sizing: border-box;
+            position: relative; 
+        }
+
+        /* Thiết kế Phiếu Vận Chuyển */
+        .shipping-label {
+            width: 70mm; 
+            min-height: 70mm;
+            border: 3px solid black; 
+            /* Chuyển sang Tahoma theo yêu cầu */
+            font-family: Tahoma, sans-serif;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            page-break-after: always;
+            box-sizing: border-box;
+        }
+        .sl-header {
+            border-bottom: 2px solid black;
+            padding: 8px;
+            display: flex;
+            justify-content: center; 
+            align-items: center;
+        }
+        .sl-section {
+            border-bottom: 1px dashed black;
+            padding: 5px 8px;
+        }
+        .sl-section:last-child {
+            border-bottom: none;
+        }
+        .sl-title {
+            font-size: 10px;
+            color: black;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .sl-content {
+            font-size: 14px;
+            font-weight: bold;
+            color: black;
+            line-height: 1.3;
+        }
+
+        /* --- CẤU HÌNH IN ẤN SIÊU NÉT (PIXEL PERFECT) --- */
+        @media print {
+            body { 
+                background-color: white; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+            }
+            .no-print { display: none !important; } 
+            
+            body:not(.printing-labels) #printable-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; margin: 0; border: none; box-shadow: none; }
+            body:not(.printing-labels) #label-area { display: none !important; }
+
+            body.printing-labels #printable-area { display: none !important; }
+            body.printing-labels #label-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            
+            @page {
+                margin: 0; 
+                size: auto;
+            }
+            
+            body.printing-labels #label-area > div { 
+                margin-left: 2mm; 
+                margin-top: 2mm; 
+            }
+            body.printing-labels .label-item { margin-bottom: 5mm; }
+
+            /* --- BÍ KÍP IN NÉT MÁY IN NHIỆT --- */
+            .label-item, .shipping-label {
+                /* Tắt làm mịn chữ -> Chữ đen đúa, sắc cạnh */
+                -webkit-font-smoothing: none !important;
+                font-smooth: never !important;
+                text-rendering: optimizeSpeed !important; 
+                color: #000000 !important;
+            }
+            
+            /* Ép tất cả viền và nét vẽ không được mờ */
+            .label-item *, .shipping-label * {
+                 shape-rendering: crispEdges !important;
+            }
+
+            /* Tăng độ đậm font chữ nhỏ để in rõ hơn */
+            .text-xs, .text-sm, .text-base, .sl-title, .sl-content {
+                font-weight: 700 !important; /* Bold đậm */
+            }
+            
+            /* Mã VT cực to thì để đậm vừa phải cho đỡ bị cục mịch */
+            .text-3xl {
+                font-weight: 900 !important;
+                letter-spacing: -1px; /* Dồn chữ lại cho chặt */
+            }
+
+            img {
+                /* Chuyển ảnh về dạng pixel đen/trắng gắt */
+                filter: grayscale(100%) contrast(300%) brightness(90%) !important;
+                image-rendering: pixelated !important; 
+            }
+        }
+    </style>
+</head>
+<body class="text-xs">
+
+    <!-- Toolbar -->
+    <div id="toolbar" class="no-print bg-white p-4 shadow-md sticky top-0 z-50 flex items-center justify-center gap-3 flex-wrap">
+        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">In Phiếu (A4)</button>
+        <button id="print-selected-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+            In Tem (Đã chọn)
+        </button>
+        <button id="print-shipping-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+            In Phiếu Vận Chuyển
+        </button>
+        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow">Xuất PDF</button>
+    </div>
+    
+    <div id="loading-state" class="text-center p-10"><p class="text-gray-600">Đang tải dữ liệu phiếu lấy hàng...</p></div>
+    
+    <div id="error-state" class="hidden text-center p-10 bg-red-100 text-red-700 w-1/2 mx-auto mt-10 rounded-lg">
+        <p class="font-bold">Không thể tải dữ liệu</p>
+        <p id="error-message">Mã đơn hàng không hợp lệ hoặc không tồn tại.</p>
+        <p class="mt-2 text-sm text-gray-600">Thử thêm <code>?ma_kho=YOUR_CODE</code> vào URL.</p>
+    </div>
+
+    <div id="label-area"></div>
+
+    <div id="printable-area" class="hidden relative">
+        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg" alt="Logo" class="absolute top-6 left-10 w-24">
+        <div id="qrcode" class="absolute top-6 right-6 w-16 h-16"></div>
+
+        <div class="text-center mb-4">
+            <h2 class="text-lg font-bold uppercase">PHIẾU LẤY HÀNG (PACKING LIST)</h2>
+            <p class="text-xs">Số Phiếu: <strong id="info-ma-kho" class="uppercase"></strong> - Mã NX: <strong id="info-ma-nx" class="uppercase"></strong></p>
+            <p id="info-date" class="text-[10px] italic"></p>
+        </div>
+
+        <div class="mb-4 text-xs">
+             <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1">
+                <div class="font-bold">Người yêu cầu:</div><div id="info-yeu-cau"></div>
+                <div class="font-bold">Bộ Phận:</div><div id="info-nganh"></div>
+                <div class="font-bold align-top">Mục Đích:</div><div id="info-muc-dich"></div>
+             </div>
+        </div>
+
+        <table class="w-full border-collapse">
+            <thead class="bg-gray-100 font-bold">
+                <tr>
+                    <th class="border border-black p-1 text-center" style="width: 4%;">STT</th>
+                    <th class="border border-black p-1 text-center" style="width: 12%;">Mã VT</th>
+                    <th class="border border-black p-1 text-center" style="width: 42%;">Tên VT</th>
+                    <th class="border border-black p-1 text-center" style="width: 10%;">Lot</th>
+                    <th class="border border-black p-1 text-center" style="width: 8%;">Date</th>
+                    <th class="border border-black p-1 text-center" style="width: 8%;">Tray</th>
+                    <th class="border border-black p-1 text-center" style="width: 6%;">Y/C</th>
+                    <th class="border border-black p-1 text-center" style="width: 6%;">SL</th>
+                    <th class="border border-black p-1 text-center no-print" style="width: 4%;">
+                        <input type="checkbox" id="select-all" class="w-4 h-4 cursor-pointer accent-blue-600" title="Chọn tất cả (Không in ngay)">
+                    </th> 
+                </tr>
+            </thead>
+            <tbody id="chi-tiet-table-body"></tbody>
+            <tfoot class="font-bold">
+                 <tr class="bg-gray-100">
+                    <td colspan="6" class="border border-black p-1 text-center">Tổng</td>
+                    <td id="total-ycsl" class="border border-black p-1 text-center"></td>
+                    <td id="total-sl" class="border border-black p-1 text-center"></td>
+                    <td class="border border-black p-1 text-center no-print"></td> 
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="pt-8 mt-8">
+            <div class="flex justify-around text-center text-sm">
+                <div><p class="font-bold">Người lập phiếu</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
+                <div><p class="font-bold">Người lấy hàng</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
+                <div><p class="font-bold">Thủ kho</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const { createClient } = supabase;
+        const SUPABASE_URL = "https://uefydnefprcannlviimp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZnlkbmVmcHJjYW5ubHZpaW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNTcwMDUsImV4cCI6MjA3NjYzMzAwNX0.X274J_1_crUknJEOT1WWUD1h0HM9WdYScDW2eWWsiLk";
+        const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        window.globalCtData = [];
+        window.globalDhData = {};
+
+        async function fetchAndRenderData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ma_kho = urlParams.get('ma_kho');
+
+            if (!ma_kho) {
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('error-state').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const { data: dhData, error: dhError } = await sb.from('don_hang').select('*').eq('ma_kho', ma_kho).single();
+                if (dhError || !dhData) throw new Error(dhError?.message || 'Không tìm thấy đơn hàng.');
+
+                const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').eq('ma_kho', ma_kho).order('stt', { ascending: true });
+                if (ctError) throw new Error(ctError.message);
+                
+                const maVachList = ctData.map(item => item.ma_vach).filter(Boolean);
+                let tonKhoMap = new Map();
+
+                if (maVachList.length > 0) {
+                    const { data: tonKhoData, error: tkError } = await sb.from('ton_kho_update').select('ma_vach, tray').in('ma_vach', maVachList);
+                    if (tkError) throw new Error(tkError.message);
+                    (tonKhoData || []).forEach(item => tonKhoMap.set(item.ma_vach, item));
+                }
+
+                window.globalCtData = ctData.map(item => ({
+                    ...item,
+                    tray: tonKhoMap.get(item.ma_vach)?.tray || 'N/A'
+                }));
+                window.globalDhData = dhData;
+
+                renderA4();
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('error-message').textContent = error.message;
+                document.getElementById('error-state').classList.remove('hidden');
+            }
+        }
+
+        function renderA4() {
+            const dhData = window.globalDhData;
+            const ctData = window.globalCtData;
+
+            document.getElementById('info-ma-kho').textContent = dhData.ma_kho;
+            document.getElementById('info-ma-nx').textContent = dhData.ma_nx || '';
+            const date = new Date(dhData.thoi_gian);
+            document.getElementById('info-date').textContent = `Ngày ${date.getDate()} tháng ${date.getMonth() + 1} năm ${date.getFullYear()}`;
+            document.getElementById('info-yeu-cau').textContent = dhData.yeu_cau;
+            document.getElementById('info-nganh').textContent = dhData.nganh;
+            document.getElementById('info-muc-dich').textContent = dhData.muc_dich || 'Không có';
+            new QRCode(document.getElementById("qrcode"), { text: window.location.href, width: 64, height: 64 });
+
+            const tableBody = document.getElementById('chi-tiet-table-body');
+            const isXuat = dhData.ma_kho.startsWith('OUT');
+            let totalSl = 0;
+            let totalYcsl = 0;
+
+            tableBody.innerHTML = ctData.map((item, index) => {
+                const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
+                const yc_sl = item.yc_sl || 0;
+                totalSl += sl;
+                totalYcsl += yc_sl;
+                
+                return `
+                    <tr class="h-8 hover:bg-gray-50">
+                        <td class="border border-black p-1 text-center">${item.stt || index + 1}</td>
+                        <td class="border border-black p-1 text-left">${item.ma_vt}</td>
+                        <td class="border border-black p-1 text-left">${item.ten_vt}</td>
+                        <td class="border border-black p-1 text-center">${item.lot || ''}</td>
+                        <td class="border border-black p-1 text-center">${item.date || ''}</td>
+                        <td class="border border-black p-1 text-center">${item.tray}</td>
+                        <td class="border border-black p-1 text-center">${yc_sl}</td>
+                        <td class="border border-black p-1 text-center">${sl}</td>
+                        <td class="border border-black p-1 text-center no-print align-middle">
+                            <input type="checkbox" 
+                                class="w-5 h-5 cursor-pointer accent-blue-600 print-checkbox" 
+                                data-index="${index}"
+                                title="Tick để in ngay, hoặc chọn để in hàng loạt"
+                                onchange="window.printSingleLabelIfChecked(${index}, this)"
+                            >
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            document.getElementById('total-sl').textContent = totalSl;
+            document.getElementById('total-ycsl').textContent = totalYcsl;
+
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('printable-area').classList.remove('hidden');
+        }
+
+        function removeVietnameseTones(str) {
+            if (!str) return '';
+            str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            str = str.replace(/đ/g, "d").replace(/Đ/g, "D");
+            return str;
+        }
+
+        function generateLabelHTML(item) {
+            const isXuat = window.globalDhData.ma_kho && window.globalDhData.ma_kho.startsWith('OUT');
+            const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
+            const yc_sl = item.yc_sl || 0;
+            const muc_dich = window.globalDhData.muc_dich || '';
+            const nganh = window.globalDhData.nganh || '';
+            const yeu_cau = window.globalDhData.yeu_cau || '';
+            const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
+            const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
+
+            return `
+                <div class="label-item">
+                    <div class="absolute inset-0 border-2 border-black z-50 pointer-events-none"></div>
+                    
+                    <img src="${logoUrl}" class="absolute top-1 left-1 h-9 w-auto object-contain grayscale z-0 opacity-100" style="filter: grayscale(100%) contrast(300%) brightness(90%);" alt="Logo">
+                    
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-start border-b-2 border-black pb-1 mb-2">
+                            <div class="flex flex-col max-w-[75%]">
+                                <div class="h-8 w-full"></div> 
+                                <span class="text-3xl font-black tracking-tight leading-none break-words -mt-1 mix-blend-multiply text-black">${item.ma_vt}</span>
+                            </div>
+                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white/80 backdrop-blur-[1px]">
+                                <div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>
+                                <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 text-xs font-bold mb-2 pb-1 border-b border-black border-dashed text-black">
+                            <div class="text-left whitespace-nowrap overflow-hidden text-ellipsis pr-1">LOT: ${item.lot || ''}</div>
+                            <div class="text-right whitespace-nowrap overflow-hidden text-ellipsis pl-1">DATE: ${item.date || ''}</div>
+                        </div>
+                        
+                        <div class="text-sm font-semibold leading-tight text-left text-black">
+                            ${item.ten_vt}
+                        </div>
+                        
+                        <div class="mt-1 pt-1 text-[10px] italic text-black border-t border-black">
+                            <span class="font-bold not-italic text-black">${nganh}</span> - 
+                            <span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - 
+                            ${muc_dich}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.handlePrintShippingLabel = function() {
+            const labelArea = document.getElementById('label-area');
+            const dhData = window.globalDhData;
+            const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
+            
+            const nganh = dhData.nganh || '';
+            const yeu_cau = dhData.yeu_cau || '';
+            const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
+            const ghi_chu = dhData.ghi_chu || '...................................';
+            const muc_dich = dhData.muc_dich || '';
+            const ma_nx = dhData.ma_nx || dhData.ma_kho || '................';
+
+            labelArea.innerHTML = '';
+
+            const shippingLabelHTML = `
+                <div class="shipping-label">
+                    <div class="sl-header justify-center border-b-2 border-black p-2">
+                        <img src="${logoUrl}" class="h-12 grayscale object-contain" style="filter: grayscale(100%) contrast(300%) brightness(90%);" alt="Logo">
+                    </div>
+
+                    <div class="sl-section bg-gray-100 text-center">
+                         <div class="sl-title text-black">MÃ XUẤT KHO</div>
+                         <div class="text-2xl font-black tracking-widest text-black">${ma_nx}</div>
+                    </div>
+
+                    <div class="sl-section">
+                        <div class="flex items-baseline gap-2">
+                            <div class="sl-title whitespace-nowrap text-black">TỪ / FROM:</div>
+                            <div class="text-xl font-black text-black">WH-B4</div>
+                        </div>
+                        <div class="text-sm font-bold mt-1 text-black">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
+                    </div>
+
+                    <div class="sl-section">
+                        <div class="sl-title text-black">ĐẾN / TO:</div>
+                        <div class="sl-content text-lg break-words text-black">
+                            ${ghi_chu}
+                        </div>
+                    </div>
+
+                    <div class="sl-section flex-grow">
+                        <div class="sl-title text-black">NỘI DUNG / CONTENT:</div>
+                        <div class="sl-content font-normal text-xs text-justify text-black">
+                            ${muc_dich}
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
+                        <div class="text-sm font-bold text-black">Kiện: ...../.....</div>
+                        <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
+                    </div>
+                </div>
+            `;
+            
+            labelArea.innerHTML = shippingLabelHTML;
+            
+            setTimeout(() => {
+                document.body.classList.add('printing-labels');
+                setTimeout(() => {
+                    window.print();
+                    document.body.classList.remove('printing-labels');
+                }, 500);
+            }, 100);
+        };
+
+        window.printSingleLabelIfChecked = function(index, checkbox) {
+            if (!checkbox.checked) return;
+            if (window.isSelectingAll) return;
+
+            const item = window.globalCtData[index];
+            const labelArea = document.getElementById('label-area');
+            
+            labelArea.innerHTML = generateLabelHTML(item);
+            
+            document.body.classList.add('printing-labels');
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-labels');
+            }, 100);
+        };
+
+        window.handlePrintSelectedLabels = function() {
+            const checkboxes = document.querySelectorAll('.print-checkbox:checked');
+            const labelArea = document.getElementById('label-area');
+            labelArea.innerHTML = '';
+
+            if (checkboxes.length === 0) {
+                alert("Vui lòng chọn ít nhất 1 sản phẩm để in tem.");
+                return;
+            }
+
+            checkboxes.forEach(cb => {
+                const index = parseInt(cb.getAttribute('data-index'));
+                const item = window.globalCtData[index];
+                if (item) {
+                    labelArea.insertAdjacentHTML('beforeend', generateLabelHTML(item));
+                }
+            });
+
+            document.body.classList.add('printing-labels');
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-labels');
+            }, 500);
+        };
+
+        window.isSelectingAll = false;
+        document.getElementById('select-all').addEventListener('change', function(e) {
+            window.isSelectingAll = true;
+            const isChecked = e.target.checked;
+            const checkboxes = document.querySelectorAll('.print-checkbox');
+            
+            checkboxes.forEach(cb => {
+                cb.checked = isChecked;
+            });
+            
+            setTimeout(() => { window.isSelectingAll = false; }, 100);
+        });
+
+        async function handlePdfExport() {
+            const printableArea = document.getElementById('printable-area');
+            const ma_kho = new URLSearchParams(window.location.search).get('ma_kho') || 'document';
+            
+            const bgElements = printableArea.querySelectorAll('.bg-gray-100');
+            bgElements.forEach(el => el.style.backgroundColor = '#f3f4f6');
+            const fontElements = printableArea.querySelectorAll('.font-bold');
+            fontElements.forEach(el => el.style.fontWeight = '700');
+
+            try {
+                const canvas = await html2canvas(printableArea, { scale: 8, useCORS: true, logging: false });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                pdf.addImage(imgData, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+                pdf.save(`PackingList_${ma_kho}.pdf`);
+            } catch (error) {
+                console.error("PDF export error:", error);
+                alert("Đã xảy ra lỗi khi tạo tệp PDF.");
+            } finally {
+                bgElements.forEach(el => el.style.backgroundColor = '');
+                fontElements.forEach(el => el.style.fontWeight = '');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndRenderData();
+            
+            document.getElementById('print-btn').addEventListener('click', () => {
+                document.body.classList.remove('printing-labels');
+                window.print();
+            });
+
+            document.getElementById('print-selected-btn').addEventListener('click', window.handlePrintSelectedLabels);
+            document.getElementById('print-shipping-btn').addEventListener('click', window.handlePrintShippingLabel);
+            document.getElementById('pdf-btn').addEventListener('click', handlePdfExport);
+        });
+    </script>
+</body>
+</html>

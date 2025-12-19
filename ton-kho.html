@@ -1,0 +1,86 @@
+<div class="flex-shrink-0">
+    <div class="bg-white p-4 rounded-lg shadow-md mb-4">
+        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
+            <div class="flex flex-wrap gap-2 items-center">
+                <input type="text" id="ton-kho-search" placeholder="Tìm kiếm chung..." class="px-3 py-2 border rounded-md w-48">
+                <div class="relative"><button id="ton-kho-filter-ma-vt-btn" data-filter-key="ma_vt" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-32">Mã VT</button></div>
+                <div class="relative"><button id="ton-kho-filter-lot-btn" data-filter-key="lot" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-28">Lot</button></div>
+                <div class="relative"><button id="ton-kho-filter-date-btn" data-filter-key="date" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-28">Date</button></div>
+                <div class="relative"><button id="ton-kho-filter-tinh-trang-btn" data-filter-key="tinh_trang" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-32">Tình Trạng</button></div>
+                <div class="relative"><button id="ton-kho-filter-nganh-btn" data-filter-key="nganh" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-28">Ngành</button></div>
+                <div class="relative"><button id="ton-kho-filter-phu-trach-btn" data-filter-key="phu_trach" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-32">Phụ Trách</button></div>
+                <div class="flex items-center space-x-1 bg-gray-200 rounded-full p-0.5 text-sm ml-2">
+                    <button id="ton-kho-toggle-available" data-stock-mode="available" class="px-4 py-1 rounded-full">Khả Dụng</button>
+                    <button id="ton-kho-toggle-all" data-stock-mode="all" class="px-4 py-1 rounded-full">Tất Cả</button>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <button id="ton-kho-reset-filters" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md">Xóa Lọc</button>
+                <button id="ton-kho-btn-add" class="tk-admin-only bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">+ Thêm</button>
+                <button id="ton-kho-btn-edit" class="tk-admin-only bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md" disabled>Sửa</button>
+                <button id="ton-kho-btn-delete" class="tk-admin-only bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md" disabled>Xóa</button>
+                <button id="ton-kho-btn-excel" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Excel</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="flex-grow bg-white rounded-lg shadow-md overflow-hidden">
+    <div class="table-container">
+        <table class="min-w-full border-collapse">
+            <thead class="bg-gray-200"><tr>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 2%;"><input type="checkbox" id="ton-kho-select-all"></th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 15%;">Code + Lot + EXP</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 10%;">Mã VT</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 30%;">Tên VT</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 5%;">Lot</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 5%;">Date</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
+                    <div>Đầu<span id="ton-kho-header-dau-count" class="block font-bold text-black text-xs"></span></div>
+                </th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
+                    <div>Nhập<span id="ton-kho-header-nhap-count" class="block font-bold text-green-600 text-xs"></span></div>
+                </th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
+                    <div>Xuất<span id="ton-kho-header-xuat-count" class="block font-bold text-red-600 text-xs"></span></div>
+                </th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
+                    <div>Cuối<span id="ton-kho-header-cuoi-count" class="block font-bold text-red-600 text-xs"></span></div>
+                </th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">T.Trạng</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
+                    <div class="flex justify-between items-center">
+                        <span>Tray</span>
+                        <button id="ton-kho-toggle-cols" class="ml-1 text-blue-600 hover:text-blue-800 font-mono">[+]</button>
+                    </div>
+                </th>
+                <th class="ton-kho-col-nganh px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">Ngành</th>
+                <th class="ton-kho-col-phu-trach px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 9%;">Phụ Trách</th>
+                <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 1.5%;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </th>
+            </tr></thead>
+            <tbody id="ton-kho-table-body" class="bg-white"></tbody>
+        </table>
+    </div>
+</div>
+<div class="flex-shrink-0 flex flex-col md:flex-row justify-between items-center mt-4 p-4 bg-white rounded-lg shadow-md">
+    <span id="ton-kho-pagination-info" class="text-sm text-gray-600 mb-2 md:mb-0"></span>
+    <span id="ton-kho-selection-info" class="text-sm text-gray-600 mb-2 md:mb-0"></span>
+    <div class="flex items-center gap-2 flex-wrap">
+        <select id="ton-kho-items-per-page" class="px-3 py-1 border rounded-md bg-white">
+            <option value="50">50 / trang</option>
+            <option value="100">100 / trang</option>
+            <option value="200">200 / trang</option>
+            <option value="500">500 / trang</option>
+        </select>
+        <button id="ton-kho-prev-page" class="px-3 py-1 border rounded-md bg-white">Trước</button>
+        <div class="flex items-center gap-1 mx-2">
+            <span class="text-sm text-gray-700">Trang</span>
+            <input type="number" id="ton-kho-page-input" class="w-16 text-center border rounded-md p-1 text-sm" value="1" min="1">
+            <span id="ton-kho-total-pages" class="text-sm text-gray-700 whitespace-nowrap">/ 1</span>
+        </div>
+        <button id="ton-kho-next-page" class="px-3 py-1 border rounded-md bg-white">Sau</button>
+    </div>
+</div>

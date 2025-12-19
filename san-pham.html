@@ -1,0 +1,67 @@
+<div class="flex-shrink-0">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Quản Lý Sản Phẩm</h1>
+    <div class="bg-white p-4 rounded-lg shadow-md mb-4">
+        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
+            <div class="flex flex-wrap gap-2 items-center">
+                <input type="text" id="san-pham-search" placeholder="Tìm kiếm chung..." class="px-3 py-2 border rounded-md w-48">
+                <div class="relative">
+                    <button id="san-pham-filter-ma-vt-btn" data-filter-key="ma_vt" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Mã VT</button>
+                </div>
+                <div class="relative">
+                    <button id="san-pham-filter-ten-vt-btn" data-filter-key="ten_vt" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Tên Vật Tư</button>
+                </div>
+                <div class="relative">
+                    <button id="san-pham-filter-nganh-btn" data-filter-key="nganh" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Ngành</button>
+                </div>
+                <div class="relative">
+                    <button id="san-pham-filter-phu-trach-btn" data-filter-key="phu_trach" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Phụ Trách</button>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <button id="san-pham-reset-filters" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md">Xóa Lọc</button>
+                <button id="san-pham-btn-add" class="sp-admin-only bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">+ Thêm</button>
+                <button id="san-pham-btn-edit" class="sp-admin-only bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md" disabled>Sửa</button>
+                <button id="san-pham-btn-delete" class="sp-admin-only bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md" disabled>Xóa</button>
+                <button id="san-pham-btn-excel" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Excel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="flex-grow bg-white rounded-lg shadow-md overflow-hidden">
+    <div class="table-container">
+        <table class="min-w-full border-collapse">
+            <thead class="bg-gray-200"><tr>
+                <th class="px-4 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 5%;"><input type="checkbox" id="san-pham-select-all"></th>
+                <th class="px-4 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 10%;">Ảnh</th>
+                <th class="px-6 py-2 text-left text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 20%;">Mã Vật Tư</th>
+                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 40%;">Tên Vật Tư</th>
+                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 10%;">Ngành</th>
+                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 20%;">Phụ Trách</th>
+            </tr></thead>
+            <tbody id="san-pham-table-body" class="bg-white"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="flex-shrink-0 flex flex-col md:flex-row justify-between items-center mt-4 p-4 bg-white rounded-lg shadow-md">
+    <span id="san-pham-pagination-info" class="text-sm text-gray-600 mb-2 md:mb-0"></span>
+    <span id="san-pham-selection-info" class="text-sm text-gray-600 mb-2 md:mb-0"></span>
+    <div class="flex items-center gap-2 flex-wrap">
+        <select id="san-pham-items-per-page" class="px-3 py-1 border rounded-md bg-white">
+            <option value="50">50 / trang</option>
+            <option value="100">100 / trang</option>
+            <option value="200">200 / trang</option>
+            <option value="500">500 / trang</option>
+        </select>
+        <button id="san-pham-prev-page" class="px-3 py-1 border rounded-md bg-white">Trước</button>
+        
+        <div class="flex items-center gap-1 mx-2">
+            <span class="text-sm text-gray-700">Trang</span>
+            <input type="number" id="san-pham-page-input" class="w-16 text-center border rounded-md p-1 text-sm" value="1" min="1">
+            <span id="san-pham-total-pages" class="text-sm text-gray-700 whitespace-nowrap">/ 1</span>
+        </div>
+
+        <button id="san-pham-next-page" class="px-3 py-1 border rounded-md bg-white">Sau</button>
+    </div>
+</div>

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phiếu In Đơn Hàng</title>
+    <link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Thêm lại html2canvas và jspdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-area, #printable-area * {
+                visibility: visible;
+            }
+            #printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+        body {
+            background-color: #f0f2f5;
+        }
+        #printable-area {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            border: 1px #D1D1D1 solid;
+            background: white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        #chi-tiet-table-body tr {
+            height: 1.08cm; /* Fixed height for all rows (reduced 10%) */
+            page-break-inside: avoid; /* Prevent rows from splitting across pages */
+        }
+        #chi-tiet-table-body td {
+            vertical-align: middle; /* Vertically center content in taller cells */
+        }
+    </style>
+</head>
+<body class="font-sans text-xs">
+
+    <div id="toolbar" class="no-print bg-white p-4 shadow-md sticky top-0 z-50 flex items-center justify-center gap-3">
+        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">In Phiếu</button>
+        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Xuất PDF</button>
+        <button id="excel-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Xuất Excel</button>
+        <div class="border-l pl-3 ml-3">
+             <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="signature-toggle" class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                <span class="text-gray-700 font-medium">Hiện chữ ký</span>
+            </label>
+        </div>
+    </div>
+    
+    <div id="loading-state" class="text-center p-10">
+        <p class="text-gray-600">Đang tải dữ liệu đơn hàng...</p>
+    </div>
+    
+    <div id="error-state" class="hidden text-center p-10 bg-red-100 text-red-700 w-1/2 mx-auto mt-10 rounded-lg">
+        <p class="font-bold">Không thể tải đơn hàng</p>
+        <p id="error-message">Mã đơn hàng không hợp lệ hoặc không tồn tại.</p>
+    </div>
+
+    <div id="printable-area" class="hidden relative">
+        <!-- Logo mới -->
+        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg" alt="Logo" class="absolute top-6 left-10 w-24"> <!-- Thay đổi từ left-12 -->
+        
+        <div id="qrcode" class="absolute top-6 right-6 w-16 h-16 flex-shrink-0"></div> <!-- Thay đổi từ w-12 h-12 -->
+
+        <div class="text-center mb-6">
+            <h2 id="main-title" class="text-base font-bold uppercase"></h2>
+            <p id="sub-title" class="text-[10px]">
+                <em id="sub-title-label"></em>
+                <strong id="sub-title-value" class="uppercase"></strong>
+            </p>
+            <p id="info-date" class="text-[8px] italic"></p>
+        </div>
+
+        <div class="mb-4"> <!-- Thay đổi từ mb-8 -->
+             <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1 text-[10px]">
+                <div id="receiver-label" class="italic text-left whitespace-nowrap"></div>
+                <div id="info-yeu-cau"></div>
+                
+                <div class="italic text-left whitespace-nowrap">Bộ Phận / Department :</div>
+                <div id="info-nganh"></div>
+
+                <div class="italic text-left whitespace-nowrap align-top">Lý do / Reason (Địa điểm/thời gian/tên Hội nghị) :</div>
+                <div id="info-muc-dich" class="font-bold"></div>
+             </div>
+        </div>
+
+        <table class="w-full border-collapse text-[8px]">
+            <thead class="align-middle">
+                <tr class="bg-gray-100"> <!-- Thêm lại bg-gray-100 -->
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100">
+                        <span class="font-semibold">No</span> <!-- Đổi sang font-semibold -->
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 37.5%;" id="th-ten-hang">
+                        <span class="font-semibold">Tên Hàng</span><br> <!-- Đổi sang font-semibold -->
+                        <em class="font-normal">(Item)</em>
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12%;" id="th-ma-hang">
+                        <span class="font-semibold">Mã Hàng</span><br> <!-- Đổi sang font-semibold -->
+                        <em class="font-semibold">(Code)</em> <!-- Đổi sang font-semibold -->
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 5%;">
+                        <span class="font-semibold">Đơn Vị</span><br> <!-- Đổi sang font-semibold -->
+                        <em class="font-normal">Unit</em>
+                    </th>
+                    <th colspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 14%;">
+                        <span class="font-semibold">Số Lượng</span><br> <!-- Đổi sang font-semibold -->
+                        <em class="font-normal">(Quantity)</em>
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;" id="th-trung-bay">
+                        <span class="font-semibold">Trưng Bày</span> <!-- Đổi sang font-semibold -->
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;" id="th-tieu-hao">
+                        <span class="font-semibold">Tiêu Hao</span> <!-- Đổi sang font-semibold -->
+                    </th>
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12.5%;" id="th-ghi-chu">
+                        <span class="font-semibold">Ghi Chú</span><br> <!-- Đổi sang font-semibold -->
+                        <em class="font-normal">(Lot)</em>
+                    </th>
+                </tr>
+                <tr class="bg-gray-100"> <!-- Thêm lại bg-gray-100 -->
+                    <th class="border border-black p-1 text-center bg-gray-100">
+                        <span class="font-semibold">Yêu Cầu</span> <!-- Đổi sang font-semibold -->
+                    </th>
+                    <th class="border border-black p-1 text-center bg-gray-100">
+                        <span class="font-semibold" id="sl-header-text">Thực Xuất/Nhập</span> <!-- Đổi sang font-semibold -->
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="chi-tiet-table-body">
+            </tbody>
+            <tfoot class="font-semibold"> <!-- Đổi sang font-semibold -->
+                 <tr class="bg-gray-100"> <!-- Thêm lại bg-gray-100 -->
+                    <td colspan="4" class="border border-black p-1 text-center font-semibold bg-gray-100">Tổng</td> <!-- Đổi sang font-semibold -->
+                    <td id="total-ycsl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td> <!-- Đổi sang font-semibold -->
+                    <td id="total-sl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td> <!-- Đổi sang font-semibold -->
+                    <td colspan="3" class="border border-black p-1 bg-gray-100" id="tfoot-colspan"></td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <!-- Dòng xác nhận mới - chỉ hiện khi là phiếu NHẬP -->
+        <div id="confirmation-line" class="hidden text-left text-[10px] italic">
+            Xác nhận hàng hóa đã được kiểm đếm & nhập kho đầy đủ / Goods have been checked & received thoroughly
+        </div>
+        
+        <div id="signature-section" class="hidden pt-0.000001 mt-4">
+            <div class="flex justify-between text-center text-[10px]">
+                <div>
+                    <p class="font-semibold">Người yêu cầu xuất hàng</p> <!-- Đổi sang font-semibold -->
+                    <p class="italic mt-1">Requestor's signature</p>
+                    <div class="mt-5" id="sig-yeu-cau">&nbsp;</div>
+                </div>
+                <div>
+                    <p class="font-semibold">Người nhận hàng</p> <!-- Đổi sang font-semibold -->
+                    <p class="italic mt-1">Receiver's signature</p>
+                    <div class="mt-5">&nbsp;</div>
+                </div>
+                <div>
+                    <p class="font-semibold">Thủ kho</p> <!-- Đổi sang font-semibold -->
+                    <p class="italic mt-1">Storeman's signature</p>
+                    <div class="mt-5">&nbsp;</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 text-[10px]">
+            <p class="font-semibold">Lưu ý / Notes:</p> <!-- Đổi sang font-semibold -->
+            <ol class="list-decimal list-inside space-y-1 mt-2">
+                <li>
+                    Chỉ nhân viên được chỉ định mới được quyền ký Phiếu xuất kho này
+                    <br><em class="ml-4">Only appointed personnel have the rights to sign this Delivery Order</em>
+                </li>
+                <li>
+                    Vui lòng thông báo cho Thủ kho 4 tiếng trước khi nhận hàng để Thủ kho có thể chuẩn bị hàng hóa sẵn sàng
+                    <br><em class="ml-4">Please inform Storeman at least 4 hours in advance for necessary arrangement</em>
+                </li>
+                <li>
+                    Việc nhận hàng được thực hiện tại kho và người nhận hàng phải đeo thẻ nhân viên JNJ và xuất trình Phiếu xuất kho khi nhận hàng
+                    <br><em class="ml-4">The process must only be conducted at store and receiver have to wear JNJ employee card and present Delivery Order</em>
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <script type="module">
+        const { createClient } = supabase;
+        const SUPABASE_URL = "https://uefydnefprcannlviimp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZnlkbmVmcHJjYW5ubHZpaW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNTcwMDUsImV4cCI6MjA3NjYzMzAwNX0.X274J_1_crUknJEOT1WWUD1h0HM9WdYScDW2eWWsiLk";
+        const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let donHangData = null;
+        let chiTietData = [];
+
+        function sanitizeFileName(fileName) {
+            if (!fileName) return 'file';
+            return fileName
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim()
+                .replace(/\s+/g, '-')
+                .replace(/[^\w-]+/g, '');
+        }
+
+        async function fetchAndRenderData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ma_kho = urlParams.get('ma_kho');
+
+            if (!ma_kho) {
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('error-state').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const { data: dhData, error: dhError } = await sb.from('don_hang').select('*').eq('ma_kho', ma_kho).single();
+                if (dhError || !dhData) throw new Error(dhError?.message || 'Không tìm thấy đơn hàng.');
+                
+                donHangData = dhData;
+                
+                const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').eq('ma_kho', ma_kho).order('stt', { ascending: true });
+                if (ctError) throw new Error(ctError.message);
+                
+                chiTietData = ctData;
+
+                // Render Header data
+                const isXuat = donHangData.ma_kho.startsWith('OUT');
+                
+                // --- Hiển thị dòng xác nhận nếu là phiếu NHẬP ---
+                if (!isXuat) { // Thay đổi từ isXuat sang !isXuat
+                    document.getElementById('confirmation-line').classList.remove('hidden');
+                }
+                // --- Hết ---
+                
+                document.getElementById('main-title').textContent = isXuat ? 'PHIẾU XUẤT KHO (DELIVERY ORDER)' : 'PHIẾU NHẬP KHO (RECEIPT ORDER)';
+                document.getElementById('sl-header-text').textContent = isXuat ? 'Thực Xuất' : 'Thực Nhập';
+                
+                document.getElementById('sub-title-label').textContent = isXuat ? 'Số Phiếu xuất kho (DO No) :' : 'Số Phiếu nhập kho (RO No) :';
+                document.getElementById('sub-title-value').textContent = `MDDMKT2025_${donHangData.ma_nx}`;
+
+                const date = new Date(donHangData.thoi_gian);
+                const formattedDate = `Ngày ${date.getDate()} tháng ${date.getMonth() + 1} năm ${date.getFullYear()}`;
+                document.getElementById('info-date').textContent = `Ngày/Date : ${formattedDate}`;
+
+                const receiverLabelText = isXuat ? 'Tên người nhận hàng (name of receiver) :' : 'Tên người giao hàng (name of deliverer) :';
+                document.getElementById('receiver-label').innerHTML = receiverLabelText;
+
+                document.getElementById('info-yeu-cau').textContent = donHangData.yeu_cau;
+                document.getElementById('info-nganh').textContent = donHangData.nganh;
+                document.getElementById('info-muc-dich').textContent = donHangData.muc_dich || 'Không có';
+
+                // document.getElementById('sig-yeu-cau').textContent = donHangData.yeu_cau; // <- Đã xoá dòng này
+
+                // --- Ẩn cột nếu là phiếu NHẬP ---
+                if (!isXuat) {
+                    document.getElementById('th-trung-bay').classList.add('hidden');
+                    document.getElementById('th-tieu-hao').classList.add('hidden');
+                    document.getElementById('tfoot-colspan').setAttribute('colspan', '1');
+
+                    // --- Phân bổ lại độ rộng ---
+                    document.getElementById('th-ten-hang').style.width = '45.5%'; // 37.5 + 8
+                    document.getElementById('th-ma-hang').style.width = '16%';   // 12 + 4
+                    document.getElementById('th-ghi-chu').style.width = '16.5%'; // 12.5 + 4
+                }
+                // --- Hết ---
+
+                // Render Table data
+                const tableBody = document.getElementById('chi-tiet-table-body');
+                let totalSl = 0;
+                let totalYcsl = 0;
+                tableBody.innerHTML = chiTietData.map((item, index) => {
+                    const sl = isXuat ? item.xuat : item.nhap;
+                    const yc_sl = item.yc_sl || 0;
+                    totalSl += sl;
+                    totalYcsl += yc_sl;
+
+                    const slClass = sl === yc_sl ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'; // Đổi sang font-semibold
+                    const lotDisplay = sl === 0 ? '<span class="font-semibold">0</span>' : (item.lot || ''); // Đổi sang font-semibold
+                    const trungBay = item.loai === 'Trưng Bày' ? 'X' : '';
+                    const tieuHao = item.loai === 'Tiêu Hao' ? 'X' : '';
+                    
+                    // --- Chỉ thêm cell nếu là phiếu XUẤT ---
+                    const trungBayCell = isXuat ? `<td class="border border-black p-1 text-center font-semibold">${trungBay}</td>` : ''; // Đổi sang font-semibold
+                    const tieuHaoCell = isXuat ? `<td class="border border-black p-1 text-center font-semibold">${tieuHao}</td>` : ''; // Đổi sang font-semibold
+
+                    return `
+                        <tr>
+                            <td class="border border-black p-1 text-center">${item.stt || index + 1}</td>
+                            <td class="border border-black p-1 text-left">${item.ten_vt}</td>
+                            <td class="border border-black p-1 text-center font-semibold">${item.ma_vt}</td> <!-- Đổi sang font-semibold -->
+                            <td class="border border-black p-1 text-center">Pcs</td>
+                            <td class="border border-black p-1 text-center">${yc_sl}</td>
+                            <td class="border border-black p-1 text-center ${slClass}">${sl}</td>
+                            ${trungBayCell}
+                            ${tieuHaoCell}
+                            <td class="border border-black p-1 text-center">${lotDisplay}</td>
+                        </tr>
+                    `;
+                }).join('');
+                document.getElementById('total-sl').textContent = totalSl;
+                document.getElementById('total-ycsl').textContent = totalYcsl;
+
+                new QRCode(document.getElementById("qrcode"), {
+                    text: window.location.href,
+                    width: 64,  // Thay đổi từ 48
+                    height: 64, // Thay đổi từ 48
+                });
+
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('printable-area').classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading-state').classList.add('hidden');
+                document.getElementById('error-message').textContent = error.message;
+                document.getElementById('error-state').classList.remove('hidden');
+            }
+        }
+        
+        function getDynamicFilename(extension) {
+            const typeText = donHangData.ma_kho.startsWith('OUT') ? 'ThucXuat' : 'ThucNhap';
+            const mucDich = sanitizeFileName(donHangData.muc_dich);
+            const yeuCau = sanitizeFileName(donHangData.yeu_cau);
+            return `${typeText}-${mucDich}-${yeuCau}.${extension}`;
+        }
+        
+        /* Đã xoá hàm handlePdfExport() không còn sử dụng */
+        
+        /* Thêm lại hàm handlePdfExport (đổi tên thành handleAutoPdfExport) */
+        async function handleAutoPdfExport() {
+            const printableArea = document.getElementById('printable-area');
+            const signatureToggle = document.getElementById('signature-toggle');
+            const signatureSection = document.getElementById('signature-section');
+            const wasSignatureHidden = signatureSection.classList.contains('hidden');
+
+            // 1. Chuẩn bị giao diện để chụp ảnh
+            if (signatureToggle.checked) {
+                signatureSection.classList.remove('hidden');
+            }
+            
+            // Workaround cho lỗi nền bg-gray-100
+            const bgElements = printableArea.querySelectorAll('.bg-gray-100');
+            bgElements.forEach(el => {
+                el.style.backgroundColor = '#f3f4f6'; // Tailwind's gray-100
+            });
+            
+            // Workaround cho lỗi font-semibold
+            const fontElements = printableArea.querySelectorAll('.font-semibold');
+            fontElements.forEach(el => {
+                el.style.fontWeight = '600'; // Thử set FONT-WEIGHT trực tiếp
+            });
+            
+            const slElements = printableArea.querySelectorAll('.text-green-600, .text-red-600');
+            slElements.forEach(el => {
+                el.style.fontWeight = '600';
+            });
+            
+            const maHangElements = printableArea.querySelectorAll('.font-semibold');
+            maHangElements.forEach(el => {
+                el.style.fontWeight = '600';
+            });
+
+            try {
+                // 2. Chụp ảnh
+                const canvas = await html2canvas(printableArea, {
+                    scale: 3, // Tăng chất lượng ảnh chụp
+                    useCORS: true,
+                    logging: false,
+                    onclone: (clonedDoc) => {
+                        // Đảm bảo logo tải kịp
+                        const img = clonedDoc.querySelector('img[alt="Logo"]');
+                        if (img) img.crossOrigin = "anonymous";
+                    }
+                });
+
+                // 3. Tạo PDF
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'p',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                
+                // 4. Tự động lưu
+                pdf.save(getDynamicFilename('pdf'));
+
+            } catch (error) {
+                console.error("Lỗi khi xuất PDF tự động:", error);
+                alert("Đã xảy ra lỗi khi tạo tệp PDF. Vui lòng thử lại.");
+            } finally {
+                // 5. Khôi phục giao diện
+                if (wasSignatureHidden) {
+                    signatureSection.classList.add('hidden');
+                }
+                bgElements.forEach(el => {
+                    el.style.backgroundColor = '';
+                });
+                fontElements.forEach(el => {
+                    el.style.fontWeight = '';
+                });
+                slElements.forEach(el => {
+                    el.style.fontWeight = '';
+                });
+                maHangElements.forEach(el => {
+                    el.style.fontWeight = '';
+                });
+            }
+        }
+
+        function handleExcelExport() {
+            if (!donHangData || chiTietData.length === 0) return;
+            
+            const isXuat = donHangData.ma_kho.startsWith('OUT');
+            const title = isXuat ? 'PHIẾU XUẤT KHO' : 'PHIẾU NHẬP KHO';
+            const date = new Date(donHangData.thoi_gian);
+            const slHeaderText = isXuat ? "Thực Xuất (SL)" : "Thực Nhập (SL)";
+
+            const headerData = [
+                [title],
+                [],
+                ["Người yêu cầu:", donHangData.yeu_cau, "", "Mã NX:", donHangData.ma_nx],
+                ["Mục đích:", donHangData.muc_dich, "", "Ngày:", `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`],
+                ["Ghi chú ĐH:", donHangData.ghi_chu || ''],
+                [],
+            ];
+            
+            // --- Cập nhật Header Excel ---
+            let tableHeader = ["No", "Tên Hàng (Item)", "Mã Hàng (Code)", "Đơn Vị (Unit)", "Yêu Cầu (YCSL)", slHeaderText];
+            if (isXuat) {
+                tableHeader.push("Trưng Bày", "Tiêu Hao");
+            }
+            tableHeader.push("Ghi Chú (Lot)");
+            // --- Hết ---
+
+            let totalSl = 0;
+            let totalYcsl = 0;
+            
+            // --- Cập nhật Data Excel ---
+            const tableData = chiTietData.map((item, index) => {
+                const sl = isXuat ? item.xuat : item.nhap;
+                const yc_sl = item.yc_sl || 0;
+                totalSl += sl;
+                totalYcsl += yc_sl;
+
+                const lotDisplay = sl === 0 ? '0' : (item.lot || '');
+                const trungBay = item.loai === 'Trưng Bày' ? 'X' : '';
+                const tieuHao = item.loai === 'Tiêu Hao' ? 'X' : '';
+
+                let row = [item.stt || index + 1, item.ten_vt, item.ma_vt, "Pcs", yc_sl, sl];
+                if (isXuat) {
+                    row.push(trungBay, tieuHao);
+                }
+                row.push(lotDisplay);
+                return row;
+            });
+            // --- Hết ---
+
+            // --- Cập nhật Footer Excel ---
+            let totalRow = ["", "", "", "Tổng", totalYcsl, totalSl];
+            if (isXuat) {
+                totalRow.push("", ""); // Placeholder cho 2 cột ẩn
+            }
+            totalRow.push(""); // Placeholder cho Ghi Chú
+            // --- Hết ---
+
+            const footerData = [
+                [],
+                totalRow,
+                [],
+                ["", "Người Lập Phiếu", "", "Thủ Kho"],
+                ["", "(Ký, ghi rõ họ tên)", "", "(Ký, ghi rõ họ tên)"],
+                [],[],[],
+                ["", donHangData.yeu_cau]
+            ];
+            
+            const finalData = headerData.concat([tableHeader], tableData, footerData);
+            
+            const ws = XLSX.utils.aoa_to_sheet(finalData);
+            
+            // --- Cập nhật Merges và Cols Excel ---
+            const maxColIndex = isXuat ? 8 : 6; // 8 cột nếu là Xuất, 6 cột nếu là Nhập
+            
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: maxColIndex } }, // Title merge
+                { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+                { s: { r: 4, c: 1 }, e: { r: 4, c: maxColIndex } } // Mục đích merge
+            ];
+            
+            let cols = [
+                { wch: 5 }, { wch: 40 }, { wch: 15 }, { wch: 8 }, { wch: 8 }, { wch: 15 } // No, Ten, Ma, DV, YCSL, SL
+            ];
+            if (isXuat) {
+                cols.push({ wch: 10 }, { wch: 10 }); // Trung Bay, Tieu Hao
+            }
+            cols.push({ wch: 25 }); // Ghi Chu
+            
+            ws['!cols'] = cols;
+            // --- Hết ---
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "PhieuXuatNhap");
+            XLSX.writeFile(wb, getDynamicFilename('xlsx'));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndRenderData(); // Phải chạy trước để có donHangData
+
+            const originalTitle = document.title; // Lưu tiêu đề gốc
+
+            // Xử lý nút In
+            document.getElementById('print-btn').addEventListener('click', () => {
+                // Tiêu đề sẽ được đổi bằng sự kiện 'beforeprint'
+                window.print();
+            });
+            
+            // Trước khi cửa sổ in bật lên
+            window.addEventListener('beforeprint', () => {
+                if (donHangData) {
+                    // Tạo tên file động và bỏ đuôi .pdf
+                    const newTitle = getDynamicFilename('pdf').replace(/\.pdf$/, '');
+                    document.title = newTitle;
+                }
+            });
+
+            // Sau khi cửa sổ in đóng (bất kể là in hay hủy)
+            window.addEventListener('afterprint', () => {
+                document.title = originalTitle; // Khôi phục tiêu đề gốc
+            });
+
+            // Thay đổi hành vi của nút "Xuất PDF"
+            document.getElementById('pdf-btn').addEventListener('click', () => {
+                // window.print(); // Gọi chức năng in giống hệt nút "In Phiếu"
+                handleAutoPdfExport(); // Gọi hàm tự động lưu mới
+            });
+            
+            document.getElementById('excel-btn').addEventListener('click', handleExcelExport);
+            document.getElementById('signature-toggle').addEventListener('change', (e) => {
+                document.getElementById('signature-section').classList.toggle('hidden', !e.target.checked);
+                });
+        });
+    </script>
+</body>
+</html>
