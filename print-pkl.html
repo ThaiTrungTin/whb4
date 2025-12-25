@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -27,7 +28,6 @@
             width: 70mm; 
             padding: 6px; 
             margin-bottom: 5mm; 
-            /* Chuyển sang Tahoma theo yêu cầu */
             font-family: Tahoma, sans-serif; 
             page-break-inside: avoid; 
             break-inside: avoid;
@@ -42,7 +42,6 @@
             width: 70mm; 
             min-height: 70mm;
             border: 3px solid black; 
-            /* Chuyển sang Tahoma theo yêu cầu */
             font-family: Tahoma, sans-serif;
             background: white;
             display: flex;
@@ -76,6 +75,9 @@
             font-weight: bold;
             color: black;
             line-height: 1.3;
+            /* CẬP NHẬT: Cho phép xuống dòng như trong form */
+            white-space: pre-wrap !important;
+            word-break: break-word;
         }
 
         /* --- CẤU HÌNH IN ẤN SIÊU NÉT (PIXEL PERFECT) --- */
@@ -104,33 +106,27 @@
             }
             body.printing-labels .label-item { margin-bottom: 5mm; }
 
-            /* --- BÍ KÍP IN NÉT MÁY IN NHIỆT --- */
             .label-item, .shipping-label {
-                /* Tắt làm mịn chữ -> Chữ đen đúa, sắc cạnh */
                 -webkit-font-smoothing: none !important;
                 font-smooth: never !important;
                 text-rendering: optimizeSpeed !important; 
                 color: #000000 !important;
             }
             
-            /* Ép tất cả viền và nét vẽ không được mờ */
             .label-item *, .shipping-label * {
                  shape-rendering: crispEdges !important;
             }
 
-            /* Tăng độ đậm font chữ nhỏ để in rõ hơn */
             .text-xs, .text-sm, .text-base, .sl-title, .sl-content {
-                font-weight: 700 !important; /* Bold đậm */
+                font-weight: 700 !important; 
             }
             
-            /* Mã VT cực to thì để đậm vừa phải cho đỡ bị cục mịch */
             .text-3xl {
                 font-weight: 900 !important;
-                letter-spacing: -1px; /* Dồn chữ lại cho chặt */
+                letter-spacing: -1px; 
             }
 
             img {
-                /* Chuyển ảnh về dạng pixel đen/trắng gắt */
                 filter: grayscale(100%) contrast(300%) brightness(90%) !important;
                 image-rendering: pixelated !important; 
             }

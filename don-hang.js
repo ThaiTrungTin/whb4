@@ -1,6 +1,4 @@
 
-
-
 import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, currentUser, openAutocomplete, addJobToOfflineQueue, openPrintPreviewModal } from './app.js';
 
 let selectedDonHangFiles = []; 
@@ -19,8 +17,6 @@ const getElValue = (id, trim = false) => {
     const el = document.getElementById(id);
     if (!el) {
         console.error(`Lỗi nghiêm trọng: Không tìm thấy phần tử với ID "${id}".`);
-        // Return a unique string to indicate the element is missing. This helps in debugging
-        // and prevents crashes, while ensuring change detection logic remains safe.
         return `__MISSING_ELEMENT_${id}__`;
     }
     const value = el.value;
@@ -94,7 +90,6 @@ const debouncedValidateMaKho = debounce(async (ma_kho) => {
     
     let query = sb.from('don_hang').select('ma_kho', { count: 'exact', head: true }).eq('ma_kho', ma_kho);
     if(ma_kho_orig && ma_kho === ma_kho_orig) {
-        // In edit mode, and the code hasn't changed, it's valid.
         statusEl.textContent = 'Hợp lệ';
         statusEl.className = 'text-xs mt-1 h-4 text-green-600';
         inputEl.classList.remove('text-red-600');
@@ -145,22 +140,18 @@ const debouncedValidateMaNx = debounce(async (ma_nx) => {
 
     inputEl.classList.remove('text-red-600', 'text-yellow-600', 'text-green-600');
 
-    // If it's a processing code (ends with '-'), allow it without a duplicate check.
     if (ma_nx.endsWith('-')) {
         statusEl.textContent = 'Đang xử lý';
         statusEl.className = 'text-xs mt-1 h-4 text-green-600';
         inputEl.classList.add('text-yellow-600');
-        // Enable save as long as ma_kho is not invalid
         const isDisabled = document.getElementById('don-hang-modal-ma-kho').classList.contains('text-red-600');
         saveDonHangBtn.disabled = isDisabled;
         if (saveAndPrintBtn) saveAndPrintBtn.disabled = isDisabled;
-        return; // Exit early
+        return; 
     }
 
-    // Logic for non-processing (complete) codes
     let query = sb.from('don_hang').select('ma_nx', { count: 'exact', head: true }).eq('ma_nx', ma_nx);
     if (ma_kho_orig) {
-        // Exclude the current order from the duplicate check
         query = query.neq('ma_kho', ma_kho_orig);
     }
     const { count, error } = await query;
@@ -528,8 +519,8 @@ function renderDonHangTable(data) {
                     <td class="px-1 py-2 text-sm border border-gray-300 text-center ${maNxClass}">${dh.ma_nx || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.yeu_cau || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.nganh || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 break-words border border-gray-300 text-left">${dh.muc_dich || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 break-words border border-gray-300 text-left">${dh.ghi_chu || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 whitespace-pre-wrap border border-gray-300 text-left">${dh.muc_dich || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 whitespace-pre-wrap border border-gray-300 text-left">${dh.ghi_chu || ''}</td>
                     <td class="px-3 py-2 border border-gray-300 text-center file-cell">${fileIcon}</td>
                 </tr>
             `;
@@ -576,14 +567,11 @@ function toggleDonHangModalColumns() {
     const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
     const isNhap = loaiDon === 'Nhap';
 
-    // Toggle "Loại" column visibility
     document.getElementById('don-hang-chi-tiet-loai-header')?.classList.toggle('hidden', isNhap);
     document.querySelectorAll('.chi-tiet-loai-cell').forEach(cell => cell.classList.toggle('hidden', isNhap));
     
-    // Toggle bulk fill button visibility
     document.getElementById('don-hang-fill-sl-all-btn')?.classList.toggle('hidden', !isNhap);
 
-    // Update SL header text
     const slHeaderTextEl = document.getElementById('don-hang-sl-header-text');
     if (slHeaderTextEl) {
         slHeaderTextEl.textContent = isNhap ? 'Nhập' : 'SL';
@@ -699,7 +687,6 @@ function openLotSelectorPopover(inputElement, item) {
 
     const optionsList = popover.querySelector('.autocomplete-options-list');
     if (item.lotOptions && item.lotOptions.length > 0) {
-        // Sort options: stock > 0 first, then by descending stock amount
         item.lotOptions.sort((a, b) => b.ton_cuoi - a.ton_cuoi);
 
         optionsList.innerHTML = item.lotOptions.map(opt => {
@@ -942,11 +929,19 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     document.getElementById('cancel-don-hang-btn').classList.toggle('hidden', isViewMode);
     document.getElementById('close-don-hang-view-btn').classList.toggle('hidden', !isViewMode);
 
+    // --- AUTOCOMPLETE LOGIC FOR NGANH & YEU CAU ---
     let uniqueNganhList = [];
-    const { data: nganhPhuTrachData, error: nganhError } = await sb.from('san_pham').select('nganh, phu_trach').neq('nganh', null).neq('nganh', '');
-    if (!nganhError && nganhPhuTrachData) {
+    let uniqueYeuCauList = [];
+
+    // Fetch unique data for autocomplete
+    const [nganhRes, yeuCauRes] = await Promise.all([
+        sb.from('san_pham').select('nganh, phu_trach').neq('nganh', null).neq('nganh', ''),
+        sb.from('don_hang').select('yeu_cau').neq('yeu_cau', null).neq('yeu_cau', '')
+    ]);
+
+    if (!nganhRes.error && nganhRes.data) {
         const nganhMap = new Map();
-        nganhPhuTrachData.forEach(item => {
+        nganhRes.data.forEach(item => {
             if (!nganhMap.has(item.nganh)) {
                 nganhMap.set(item.nganh, item.phu_trach || '');
             }
@@ -954,6 +949,11 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         uniqueNganhList = Array.from(nganhMap, ([nganh, phu_trach]) => ({ nganh, phu_trach })).sort((a,b) => a.nganh.localeCompare(b.nganh));
     }
 
+    if (!yeuCauRes.error && yeuCauRes.data) {
+        uniqueYeuCauList = [...new Set(yeuCauRes.data.map(item => item.yeu_cau))].sort().map(name => ({ yeu_cau: name }));
+    }
+
+    // Nganh Autocomplete
     const nganhInput = document.getElementById('don-hang-modal-nganh');
     const handleNganhAutocomplete = () => {
         const inputValue = nganhInput.value.toLowerCase();
@@ -961,22 +961,39 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             item.nganh.toLowerCase().includes(inputValue) || 
             (item.phu_trach && item.phu_trach.toLowerCase().includes(inputValue))
         );
-        
         openAutocomplete(nganhInput, suggestions, {
             valueKey: 'nganh',
             primaryTextKey: 'nganh',
             secondaryTextKey: 'phu_trach',
-            width: '400px',
+            width: `${nganhInput.offsetWidth}px`,
             onSelect: (selectedValue) => {
                 nganhInput.value = selectedValue;
                 updateGeneratedCodes();
             }
         });
     };
-    
     nganhInput.addEventListener('focus', handleNganhAutocomplete);
     nganhInput.addEventListener('input', debounce(handleNganhAutocomplete, 200));
-    
+
+    // Yeu Cau Autocomplete (NÂNG CẤP)
+    const yeuCauInput = document.getElementById('don-hang-modal-yeu-cau');
+    const handleYeuCauAutocomplete = () => {
+        const inputValue = yeuCauInput.value.toLowerCase();
+        const suggestions = uniqueYeuCauList.filter(item => 
+            item.yeu_cau.toLowerCase().includes(inputValue)
+        );
+        openAutocomplete(yeuCauInput, suggestions, {
+            valueKey: 'yeu_cau',
+            primaryTextKey: 'yeu_cau',
+            onSelect: (selectedValue) => {
+                yeuCauInput.value = selectedValue;
+            }
+        });
+    };
+    yeuCauInput.addEventListener('focus', handleYeuCauAutocomplete);
+    yeuCauInput.addEventListener('input', debounce(handleYeuCauAutocomplete, 200));
+    // --- END AUTOCOMPLETE LOGIC ---
+
     if (mode === 'add') {
         document.getElementById('don-hang-modal-title').textContent = 'Thêm Đơn Hàng Mới';
         document.getElementById('don-hang-edit-mode-ma-kho').value = '';
@@ -1262,7 +1279,6 @@ async function handleSaveDonHang(e, printAction = null) {
             ghi_chu: getElValue('don-hang-modal-ghi-chu', true),
         };
         
-        // Check for missing elements before proceeding
         for (const key in donHangData) {
             if (typeof donHangData[key] === 'string' && donHangData[key].startsWith('__MISSING_ELEMENT_')) {
                 throw new Error(`Không thể lưu: Thiếu phần tử DOM cho trường ${key}.`);
@@ -1311,7 +1327,7 @@ async function handleSaveDonHang(e, printAction = null) {
             const isXuat = donHangData.ma_kho.startsWith('OUT');
             if (isXuat) {
                 showPrintChoiceModal(donHangData.ma_kho);
-            } else { // Is Nhap
+            } else { 
                 openPrintPreviewModal(`print.html?ma_kho=${donHangData.ma_kho}`, `Phiếu Nhập Kho - ${donHangData.ma_kho}`);
             }
         }
@@ -1452,12 +1468,12 @@ function hasDonHangChanges() {
 
     const getComparableItem = ({ ma_vt, lot, yc_sl, sl, loai }) => ({ ma_vt, lot, yc_sl, sl, loai });
     try {
-        const initialChiTietString = JSON.stringify(initialChiTietItems.map(getComparableItem));
-        const currentChiTietString = JSON.stringify(chiTietItems.map(getComparableItem));
-        if (initialChiTietString !== currentChiTietString) return true;
+        const initialChiTietItemsFiltered = initialChiTietItems.map(getComparableItem);
+        const currentChiTietItemsFiltered = chiTietItems.map(getComparableItem);
+        if (JSON.stringify(initialChiTietItemsFiltered) !== JSON.stringify(currentChiTietItemsFiltered)) return true;
     } catch(e) {
         console.error("Error comparing chi tiet items:", e);
-        return true; // Assume changes if something goes wrong
+        return true; 
     }
 
     return false;
@@ -1575,7 +1591,7 @@ export function initDonHangView() {
             const ma_kho = selectedIds[0];
             if (ma_kho.startsWith('IN')) {
                 openPrintPreviewModal(`print.html?ma_kho=${ma_kho}`, `Phiếu Nhập Kho - ${ma_kho}`);
-            } else { // Starts with OUT
+            } else { 
                 showPrintChoiceModal(ma_kho);
             }
         }
@@ -1588,14 +1604,13 @@ export function initDonHangView() {
             if (ma_kho) {
                 if (ma_kho.startsWith('IN')) {
                     openPrintPreviewModal(`print.html?ma_kho=${ma_kho}`, `Phiếu Nhập Kho - ${ma_kho}`);
-                } else { // Starts with OUT
+                } else { 
                     showPrintChoiceModal(ma_kho);
                 }
             }
         });
     }
 
-    // Listeners for the new choice modal
     document.getElementById('print-choice-do-btn').addEventListener('click', () => {
         if (currentPrintChoiceMaKho) {
             openPrintPreviewModal(`print.html?ma_kho=${currentPrintChoiceMaKho}`, `Phiếu Xuất Kho - ${currentPrintChoiceMaKho}`);
@@ -1626,7 +1641,6 @@ export function initDonHangView() {
     document.getElementById('don-hang-modal-loai-don').addEventListener('change', () => {
         updateGeneratedCodes();
         toggleDonHangModalColumns();
-        // Clear all "sl" values when type changes to prevent carry-over issues
         chiTietItems.forEach(item => {
             if (item) item.sl = 0;
         });
@@ -1875,11 +1889,9 @@ export function initDonHangView() {
 export async function executeSaveOrderJob(payload) {
     const { isEdit, ma_kho_orig, donHangData, newFiles, initialExistingFiles, currentExistingFiles } = payload;
     
-    // Temporarily set global state for sync function
     chiTietItems = payload.chiTietItems;
     initialChiTietItems = payload.initialChiTietItems;
 
-    // 1. Handle file uploads
     const filesToRemove = initialExistingFiles.filter(url => !currentExistingFiles.includes(url));
     if (filesToRemove.length > 0) {
         const filePathsToRemove = filesToRemove.map(url => {
@@ -1911,13 +1923,11 @@ export async function executeSaveOrderJob(payload) {
     }
     donHangData.file = [...currentExistingFiles, ...uploadedFileUrls];
 
-    // 2. Upsert don_hang
     const { error: donHangError } = isEdit
         ? await sb.from('don_hang').update(donHangData).eq('ma_kho', ma_kho_orig)
         : await sb.from('don_hang').insert(donHangData);
     if (donHangError) throw donHangError;
 
-    // 3. Sync chi_tiet
     const loai_don = donHangData.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
     await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
 }

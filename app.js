@@ -162,22 +162,34 @@ export function addJobToOfflineQueue(job) {
     saveOfflineQueue(queue);
     updateOfflineIndicator();
 }
-// --- END OFFLINE QUEUE ---
+// --- END OF FLINE QUEUE ---
 
 
 export const showLoading = (show) => document.getElementById('loading-bar').classList.toggle('hidden', !show);
 
+// Biến lưu trữ nội dung các thông báo đang hiển thị
+const activeToasts = new Set();
+
 export function showToast(message, type = 'info') {
+    // Nếu thông báo với nội dung này đang hiển thị, không hiện thêm
+    if (activeToasts.has(message)) return;
+
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
+    
+    activeToasts.add(message);
     container.appendChild(toast);
+
     setTimeout(() => toast.classList.add('show'), 100);
     setTimeout(() => {
         toast.classList.remove('show');
         toast.classList.add('hide');
-        toast.addEventListener('transitionend', () => toast.remove());
+        toast.addEventListener('transitionend', () => {
+            toast.remove();
+            activeToasts.delete(message); // Xóa khỏi danh sách theo dõi sau khi biến mất hoàn toàn
+        });
     }, 3000);
 }
 
@@ -310,14 +322,17 @@ export function openAutocomplete(inputElement, suggestions, config) {
     optionsList.innerHTML = suggestions.map(item => `
         <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 autocomplete-option" data-value="${item[config.valueKey]}">
             <div class="flex justify-between items-center pointer-events-none gap-4">
-                <p class="text-sm font-medium text-gray-900 truncate">${item[config.primaryTextKey]}</p>
-                ${config.secondaryTextKey ? `<p class="text-xs text-gray-500 truncate text-right">${item[config.secondaryTextKey] || ''}</p>` : ''}
+                <p class="text-sm font-medium text-gray-900 whitespace-nowrap">${item[config.primaryTextKey]}</p>
+                ${config.secondaryTextKey ? `<p class="text-xs text-gray-500 whitespace-nowrap text-right ml-4">${item[config.secondaryTextKey] || ''}</p>` : ''}
             </div>
         </div>
     `).join('');
 
     inputElement.parentNode.appendChild(popover);
-    popover.style.width = config.width || `${inputElement.offsetWidth}px`;
+    // Cho phép popover rộng hơn input nếu nội dung dài
+    popover.style.minWidth = `${inputElement.offsetWidth}px`;
+    popover.style.width = 'max-content';
+    popover.style.maxWidth = '400px'; // Giới hạn tối đa để không tràn màn hình quá mức
     
     optionsList.addEventListener('mousedown', (e) => { 
         const option = e.target.closest('.autocomplete-option');
