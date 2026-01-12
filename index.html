@@ -190,7 +190,7 @@
                         <span class="nav-text transition-opacity duration-300">Chi Tiết</span>
                     </button>
                     <button data-view="view-cai-dat" class="nav-button w-full flex items-center px-6 py-3 text-gray-400 hover:bg-gray-700">
-                         <svg class="w-6 h-6 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                         <svg class="w-6 h-6 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0 3.35a1.724 1.724 0 00 1.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
                         <span class="nav-text transition-opacity duration-300">Cài Đặt</span>
                     </button>
                 </nav>
@@ -823,14 +823,15 @@
                         </div>
                     </div>
                 </div>
-                <div><label for="san-pham-modal-ma-vt" class="block text-sm font-medium text-gray-700">Mã Vật Tư</label><input type="text" id="san-pham-modal-ma-vt" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
-                <div><label for="san-pham-modal-ten-vt" class="block text-sm font-medium text-gray-700">Tên Vật Tư</label><input type="text" id="san-pham-modal-ten-vt" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
-                <div><label for="san-pham-modal-nganh" class="block text-sm font-medium text-gray-700">Ngành</label><input type="text" id="san-pham-modal-nganh" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <div><label for="san-pham-modal-ma-vt" class="block text-sm font-medium text-gray-700">Mã Vật Tư <span class="text-red-500 font-bold">*</span></label><input type="text" id="san-pham-modal-ma-vt" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <div><label for="san-pham-modal-ten-vt" class="block text-sm font-medium text-gray-700">Tên Vật Tư <span class="text-red-500 font-bold">*</span></label><input type="text" id="san-pham-modal-ten-vt" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                <!-- CẬP NHẬT: Đổi thứ tự Phụ Trách lên trên Ngành -->
                 <div>
-                    <label for="san-pham-modal-phu-trach" class="block text-sm font-medium text-gray-700">Phụ Trách</label>
-                    <input type="text" id="san-pham-modal-phu-trach" list="phu-trach-list" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    <datalist id="phu-trach-list"></datalist>
+                    <label for="san-pham-modal-phu-trach" class="block text-sm font-medium text-gray-700">Phụ Trách <span class="text-red-500 font-bold">*</span></label>
+                    <input type="text" id="san-pham-modal-phu-trach" required autocomplete="off" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
+                <div><label for="san-pham-modal-nganh" class="block text-sm font-medium text-gray-700">Ngành <span class="text-red-500 font-bold">*</span></label><input type="text" id="san-pham-modal-nganh" required autocomplete="off" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></div>
+                
                 <div class="flex justify-end gap-3 pt-4">
                     <button type="button" id="cancel-san-pham-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Hủy</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Lưu</button>

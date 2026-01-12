@@ -1,10 +1,4 @@
-
-
-
-
-
-
-import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, PLACEHOLDER_IMAGE_URL, currentUser, showView } from './app.js';
+import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, PLACEHOLDER_IMAGE_URL, currentUser, showView, openAutocomplete } from './app.js';
 
 let selectedSanPhamImageFile = null;
 
@@ -138,7 +132,13 @@ function updateSanPhamActionButtonsState() {
     if (deleteBtn) deleteBtn.disabled = selectedCount === 0;
 }
 
-function openSanPhamModal(sp = null) {
+// Biến lưu trữ danh sách duy nhất để dùng cho autocomplete
+let uniqueNganhList = [];
+let uniquePhuTrachList = [];
+// Map lưu trữ quan hệ Ngành -> Phụ trách để gợi ý thông minh
+let nganhOwnerMap = new Map();
+
+async function openSanPhamModal(sp = null) {
     const modal = document.getElementById('san-pham-modal');
     const form = document.getElementById('san-pham-form');
     form.reset();
@@ -156,8 +156,8 @@ function openSanPhamModal(sp = null) {
     if (sp) {
         document.getElementById('san-pham-modal-ma-vt').value = sp.ma_vt;
         document.getElementById('san-pham-modal-ten-vt').value = sp.ten_vt;
-        document.getElementById('san-pham-modal-nganh').value = sp.nganh || '';
         document.getElementById('san-pham-modal-phu-trach').value = sp.phu_trach || '';
+        document.getElementById('san-pham-modal-nganh').value = sp.nganh || '';
         currentImageUrlInput.value = sp.url_hinh_anh || '';
         imagePreview.src = sp.url_hinh_anh || PLACEHOLDER_IMAGE_URL;
     } else {
@@ -167,12 +167,103 @@ function openSanPhamModal(sp = null) {
 
     removeImageBtn.classList.toggle('hidden', !currentImageUrlInput.value);
     
-    const datalist = document.getElementById('phu-trach-list');
-    datalist.innerHTML = '';
-    const phuTrachSet = new Set(cache.userList.map(u => u.ho_ten).filter(Boolean));
-    phuTrachSet.forEach(name => datalist.innerHTML += `<option value="${name}">`);
+    // Tải dữ liệu duy nhất cho gợi ý
+    try {
+        const { data: uniqueData, error } = await sb.from('san_pham').select('nganh, phu_trach');
+        if (!error && uniqueData) {
+            nganhOwnerMap.clear();
+            const nganhSet = new Set();
+            const phuTrachSetInSp = new Set();
+            
+            uniqueData.forEach(item => {
+                if (item.nganh) {
+                    nganhSet.add(item.nganh);
+                    if (item.phu_trach) nganhOwnerMap.set(item.nganh, item.phu_trach);
+                }
+                if (item.phu_trach) phuTrachSetInSp.add(item.phu_trach);
+            });
+            
+            uniqueNganhList = Array.from(nganhSet).sort();
+            const phuTrachSetFromUsers = new Set(cache.userList.map(u => u.ho_ten).filter(Boolean));
+            uniquePhuTrachList = Array.from(new Set([...phuTrachSetInSp, ...phuTrachSetFromUsers])).sort();
+        }
+    } catch (err) {
+        console.error("Lỗi khi tải gợi ý Ngành/Phụ trách:", err);
+    }
 
     modal.classList.remove('hidden');
+}
+
+// Hàm xử lý gợi ý cho form
+function setupSanPhamAutocomplete() {
+    const nganhInput = document.getElementById('san-pham-modal-nganh');
+    const phuTrachInput = document.getElementById('san-pham-modal-phu-trach');
+
+    const handleNganhSuggest = () => {
+        const val = nganhInput.value.toLowerCase();
+        const selectedPhuTrach = phuTrachInput.value;
+        
+        // Tạo danh sách gợi ý kèm metadata
+        let suggestions = uniqueNganhList
+            .filter(n => n.toLowerCase().includes(val))
+            .map(n => {
+                const owner = nganhOwnerMap.get(n) || '';
+                return {
+                    value: n,
+                    owner: owner,
+                    isOwned: selectedPhuTrach && owner === selectedPhuTrach
+                };
+            });
+        
+        // Sắp xếp - Ưu tiên các ngành thuộc Phụ Trách đang chọn lên đầu
+        suggestions.sort((a, b) => {
+            if (a.isOwned && !b.isOwned) return -1;
+            if (!a.isOwned && b.isOwned) return 1;
+            return a.value.localeCompare(b.value);
+        });
+
+        openAutocomplete(nganhInput, suggestions, {
+            valueKey: 'value',
+            primaryTextKey: 'value',
+            secondaryTextKey: 'owner', 
+            itemClass: (item) => {
+                return item.isOwned ? 'bg-green-50 hover:bg-green-100' : 'bg-yellow-50 hover:bg-yellow-100';
+            },
+            onSelect: (v) => { nganhInput.value = v; }
+        });
+    };
+
+    const handlePhuTrachSuggest = () => {
+        const val = phuTrachInput.value.toLowerCase();
+        const suggestions = uniquePhuTrachList
+            .filter(p => p.toLowerCase().includes(val))
+            .map(p => ({ value: p }));
+        
+        openAutocomplete(phuTrachInput, suggestions, {
+            valueKey: 'value',
+            primaryTextKey: 'value',
+            onSelect: (v) => { 
+                const isChanged = phuTrachInput.value !== v;
+                phuTrachInput.value = v;
+                // YÊU CẦU 2: Reset ô Ngành nếu đổi Phụ trách
+                if (isChanged) {
+                    nganhInput.value = '';
+                }
+                if (nganhInput.value) handleNganhSuggest();
+            }
+        });
+    };
+
+    // YÊU CẦU 1: Hiển thị ngay khi focus (click chuột vào)
+    nganhInput.addEventListener('focus', handleNganhSuggest);
+    nganhInput.addEventListener('input', debounce(handleNganhSuggest, 200));
+
+    phuTrachInput.addEventListener('focus', handlePhuTrachSuggest);
+    phuTrachInput.addEventListener('input', (e) => {
+        // Nếu người dùng xóa hoặc gõ thủ công vào ô Phụ trách -> Reset ô Ngành để đảm bảo logic phụ thuộc
+        nganhInput.value = '';
+        debounce(handlePhuTrachSuggest, 200)();
+    });
 }
 
 async function handleSaveSanPham(e) {
@@ -189,10 +280,11 @@ async function handleSaveSanPham(e) {
         phu_trach: document.getElementById('san-pham-modal-phu-trach').value.trim()
     };
 
-    if (!sanPhamData.ma_vt || !sanPhamData.ten_vt) {
-        showToast("Mã và Tên vật tư là bắt buộc.", 'error');
-        return;
-    }
+    // Kiểm tra bắt buộc cho cả 4 trường
+    if (!sanPhamData.ma_vt) { showToast("Vui lòng nhập Mã vật tư.", 'error'); return; }
+    if (!sanPhamData.ten_vt) { showToast("Vui lòng nhập Tên vật tư.", 'error'); return; }
+    if (!sanPhamData.nganh) { showToast("Vui lòng nhập/chọn Ngành.", 'error'); return; }
+    if (!sanPhamData.phu_trach) { showToast("Vui lòng nhập/chọn Phụ trách.", 'error'); return; }
 
     showLoading(true);
     try {
@@ -263,7 +355,7 @@ async function handleDeleteMultipleSanPham() {
             
         if (filesToRemove.length > 0) await sb.storage.from('anh_dai_dien').remove(filesToRemove);
 
-        const { error: deleteError } = await sb.from('san_pham').delete().in('ma_vt', selectedIds);
+        const { error: deleteError = null } = await sb.from('san_pham').delete().in('ma_vt', selectedIds);
         if (deleteError) throw deleteError;
 
         showToast(`Đã xóa ${selectedIds.length} sản phẩm.`, 'success');
@@ -307,13 +399,13 @@ async function handleExcelExport() {
         } catch (err) {
             showToast(`Lỗi khi xuất Excel: ${err.message}`, 'error');
         } finally {
-            showLoading(false);
-        }
-    };
+             showLoading(false);
+            }
+        };
 
-    document.getElementById('excel-export-filtered-btn').onclick = () => exportAndClose(false);
-    document.getElementById('excel-export-all-btn').onclick = () => exportAndClose(true);
-    document.getElementById('excel-export-cancel-btn').onclick = () => modal.classList.add('hidden');
+        document.getElementById('excel-export-filtered-btn').onclick = () => exportAndClose(false);
+        document.getElementById('excel-export-all-btn').onclick = () => exportAndClose(true);
+        document.getElementById('excel-export-cancel-btn').onclick = () => modal.classList.add('hidden');
 }
 
 async function openFilterPopover(button, view) {
@@ -466,6 +558,8 @@ export function initSanPhamView() {
     const isAdminOrUser = currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User';
     viewContainer.querySelectorAll('.sp-admin-only').forEach(el => el.classList.toggle('hidden', !isAdminOrUser));
 
+    // Khởi tạo autocomplete
+    setupSanPhamAutocomplete();
 
     document.getElementById('san-pham-search').addEventListener('input', debounce(() => {
         viewStates['view-san-pham'].searchTerm = document.getElementById('san-pham-search').value;

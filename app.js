@@ -319,20 +319,23 @@ export function openAutocomplete(inputElement, suggestions, config) {
     
     const optionsList = popover.querySelector('.autocomplete-options-list');
 
-    optionsList.innerHTML = suggestions.map(item => `
-        <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 autocomplete-option" data-value="${item[config.valueKey]}">
-            <div class="flex justify-between items-center pointer-events-none gap-4">
-                <p class="text-sm font-medium text-gray-900 whitespace-nowrap">${item[config.primaryTextKey]}</p>
-                ${config.secondaryTextKey ? `<p class="text-xs text-gray-500 whitespace-nowrap text-right ml-4">${item[config.secondaryTextKey] || ''}</p>` : ''}
+    // NÂNG CẤP: Hỗ trợ config.itemClass để gán màu sắc/style cho từng mục gợi ý
+    optionsList.innerHTML = suggestions.map(item => {
+        const itemExtraClass = config.itemClass ? config.itemClass(item) : '';
+        return `
+            <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 autocomplete-option ${itemExtraClass}" data-value="${item[config.valueKey]}">
+                <div class="flex justify-between items-center pointer-events-none gap-4">
+                    <p class="text-sm font-medium text-gray-900 whitespace-nowrap">${item[config.primaryTextKey]}</p>
+                    ${config.secondaryTextKey ? `<p class="text-xs text-gray-500 whitespace-nowrap text-right ml-4">${item[config.secondaryTextKey] || ''}</p>` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     inputElement.parentNode.appendChild(popover);
-    // Cho phép popover rộng hơn input nếu nội dung dài
     popover.style.minWidth = `${inputElement.offsetWidth}px`;
     popover.style.width = 'max-content';
-    popover.style.maxWidth = '400px'; // Giới hạn tối đa để không tràn màn hình quá mức
+    popover.style.maxWidth = '400px'; 
     
     optionsList.addEventListener('mousedown', (e) => { 
         const option = e.target.closest('.autocomplete-option');
@@ -1015,8 +1018,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const startTime = Date.now();
         try {
-            // Use a valid, authenticated endpoint to avoid CORS issues.
-            // A HEAD request to the base of the REST API is lightweight and effective.
+            // head request to the base of the REST API is lightweight and effective.
             await fetch(`${SUPABASE_URL}/rest/v1/`, {
                 method: 'HEAD',
                 headers: {
