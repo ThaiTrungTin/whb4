@@ -36,41 +36,53 @@ function hidePrintChoiceModal() {
     modal.classList.add('hidden');
 }
 
-async function getReservedQuantitiesByMaVach(maVachList, currentMaKho) {
-    const reservedMap = new Map();
-    if (!maVachList || maVachList.length === 0) return reservedMap;
+/**
+ * Lấy số lượng chờ nhập và chờ xuất của các mã vạch từ các đơn hàng "Đang xử lý" (Mã NX kết thúc bằng '-')
+ * Loại trừ đơn hàng hiện tại đang được xử lý (currentMaKho)
+ */
+async function getPendingAmountsByMaVach(maVachList, currentMaKho) {
+    const pendingMap = new Map(); // Key: ma_vach, Value: { nhap: 0, xuat: 0 }
+    if (!maVachList || maVachList.length === 0) return pendingMap;
 
-    let otherPendingOrdersQuery = sb.from('don_hang')
+    // Khởi tạo map
+    maVachList.forEach(mv => pendingMap.set(mv, { nhap: 0, xuat: 0 }));
+
+    // Lấy danh sách ma_kho của các đơn hàng đang xử lý (trừ đơn hiện tại)
+    let pendingOrdersQuery = sb.from('don_hang')
         .select('ma_kho')
-        .like('ma_nx', '%-')
-        .ilike('ma_kho', 'OUT.%');
+        .like('ma_nx', '%-');
     
     if (currentMaKho) {
-        otherPendingOrdersQuery = otherPendingOrdersQuery.neq('ma_kho', currentMaKho);
+        pendingOrdersQuery = pendingOrdersQuery.neq('ma_kho', currentMaKho);
     }
 
-    const { data: otherOrders, error: ordersError } = await otherPendingOrdersQuery;
-    if (ordersError || !otherOrders || otherOrders.length === 0) {
-        return reservedMap;
+    const { data: pendingOrders, error: ordersError } = await pendingOrdersQuery;
+    if (ordersError || !pendingOrders || pendingOrders.length === 0) {
+        return pendingMap;
     }
 
-    const otherMaKhoList = otherOrders.map(o => o.ma_kho);
-    const { data: otherChiTiet, error: chiTietError } = await sb.from('chi_tiet')
-        .select('ma_vach, xuat')
-        .in('ma_kho', otherMaKhoList)
+    const pendingMaKhoList = pendingOrders.map(o => o.ma_kho);
+    
+    // Lấy chi tiết của các đơn hàng đó
+    const { data: pendingChiTiet, error: chiTietError } = await sb.from('chi_tiet')
+        .select('ma_vach, nhap, xuat')
+        .in('ma_kho', pendingMaKhoList)
         .in('ma_vach', maVachList);
 
     if (chiTietError) {
-        console.error("Error fetching other pending details:", chiTietError);
-        return reservedMap;
+        console.error("Error fetching pending details:", chiTietError);
+        return pendingMap;
     }
 
-    (otherChiTiet || []).forEach(item => {
-        const currentReserved = reservedMap.get(item.ma_vach) || 0;
-        reservedMap.set(item.ma_vach, currentReserved + (item.xuat || 0));
+    (pendingChiTiet || []).forEach(item => {
+        if (pendingMap.has(item.ma_vach)) {
+            const current = pendingMap.get(item.ma_vach);
+            current.nhap += (item.nhap || 0);
+            current.xuat += (item.xuat || 0);
+        }
     });
 
-    return reservedMap;
+    return pendingMap;
 }
 
 
@@ -275,7 +287,7 @@ async function openDonHangFilterPopover(button, view) {
                 <span class="text-sm">${option}</span>
             </label>
         `).join('') : '<div class="text-center p-4 text-sm text-gray-500">Không có tùy chọn.</div>';
-        updateToggleAllButtonState();
+        updateToggleAllButtonState(filteredOptions);
     };
     
     const setupEventListeners = (allOptions) => {
@@ -290,7 +302,7 @@ async function openDonHangFilterPopover(button, view) {
                     tempSelectedOptions.delete(cb.value);
                 }
                 updateSelectionCount();
-                updateToggleAllButtonState();
+                updateToggleAllButtonState(allOptions.filter(opt => opt.toLowerCase().includes(searchInput.value.toLowerCase())));
             }
         });
         
@@ -584,22 +596,56 @@ function renderChiTietTable() {
     const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
     const isViewMode = document.getElementById('save-don-hang-btn').classList.contains('hidden');
     
-    tbody.innerHTML = chiTietItems.filter(Boolean).map((item, index) => {
-        const tonKhoValue = item.tonKhoData?.ton_cuoi || 0;
-        const tonKhoInfo = item.tonKhoData ? `Tồn: <span class="font-bold text-blue-600">${tonKhoValue.toLocaleString()}</span>` : 'Tồn: ?';
-        const slValue = isNaN(parseFloat(item.sl)) ? 0 : parseFloat(item.sl);
-        const trayInfo = item.tonKhoData ? `Tray: <span class="font-bold text-indigo-600">${item.tonKhoData.tray || '?'}</span>` : '';
+    // Maps để theo dõi số lượng lũy kế và số lần xuất hiện của cùng một Mã Vạch trong form hiện tại
+    const runningTotalsMap = new Map();
+    const seenCountsMap = new Map();
 
+    tbody.innerHTML = chiTietItems.filter(Boolean).map((item, index) => {
+        const maVach = item.ma_vach;
+        const actualStock = item.tonKhoData?.ton_cuoi || 0;
+        
+        // --- LOGIC TÍNH TOÁN LŨY KẾ (CUMULATIVE) ---
+        // 1. Lấy tổng số lượng GỐC của mã vạch này trong đơn hàng (từ DB)
+        const initialTotalForThisMaVach = initialChiTietItems
+            .filter(initItem => initItem.ma_vach === maVach && maVach)
+            .reduce((sum, initItem) => sum + (parseFloat(initItem.sl) || 0), 0);
+
+        // 2. Tính Tồn Đầu ảo (Tồn trước khi đơn hàng này được thực hiện)
+        let stockBeforeThisOrder;
+        if (loaiDon === 'Nhap') {
+            stockBeforeThisOrder = actualStock - initialTotalForThisMaVach;
+        } else {
+            stockBeforeThisOrder = actualStock + initialTotalForThisMaVach;
+        }
+
+        // 3. Theo dõi số lượng đang nhập trong UI (lũy kế qua các dòng)
+        const currentSlInput = isNaN(parseFloat(item.sl)) ? 0 : parseFloat(item.sl);
+        const previousTotalInUI = runningTotalsMap.get(maVach) || 0;
+        const newRunningTotalInUI = previousTotalInUI + currentSlInput;
+        runningTotalsMap.set(maVach, newRunningTotalInUI);
+
+        // 4. Theo dõi số lần xuất hiện để hiển thị dấu '*' (màu đỏ)
+        const currentSeenCount = (seenCountsMap.get(maVach) || 0) + 1;
+        seenCountsMap.set(maVach, currentSeenCount);
+        const isDuplicateRow = currentSeenCount > 1 && maVach;
+        const star = isDuplicateRow ? '<span class="text-red-600 font-bold ml-0.5">*</span>' : '';
+
+        // --- HIỂN THỊ ---
         let projectedStock;
         let projectedStockText;
         if (loaiDon === 'Nhap') {
-            projectedStock = tonKhoValue + slValue;
-            projectedStockText = `Sau Nhập: <span class="font-bold text-green-600">${projectedStock.toLocaleString()}</span>`;
+            projectedStock = stockBeforeThisOrder + newRunningTotalInUI;
+            projectedStockText = `Sau Nhập: <span class="font-bold text-green-600">${projectedStock.toLocaleString()}</span>${star}`;
         } else {
-            projectedStock = tonKhoValue - slValue;
-            projectedStockText = `Sau Xuất: <span class="font-bold ${projectedStock < 0 ? 'text-red-600' : 'text-green-600'}">${projectedStock.toLocaleString()}</span>`;
+            projectedStock = stockBeforeThisOrder - newRunningTotalInUI;
+            projectedStockText = `Sau Xuất: <span class="font-bold ${projectedStock < 0 ? 'text-red-600' : 'text-green-600'}">${projectedStock.toLocaleString()}</span>${star}`;
         }
 
+        const trayInfo = item.tonKhoData ? `Tray: <span class="font-bold text-indigo-600">${item.tonKhoData.tray || '?'}</span>` : '';
+        const pendingNhap = item.pendingData?.nhap || 0;
+        const pendingXuat = item.pendingData?.xuat || 0;
+        const pendingInfo = ` | <span class="text-yellow-600 font-bold">Chờ Nhập: ${pendingNhap.toLocaleString()}</span> | <span class="text-yellow-600 font-bold">Chờ Xuất: ${pendingXuat.toLocaleString()}</span>`;
+        const tonKhoInfo = `Tồn: <span class="font-bold text-blue-600">${stockBeforeThisOrder.toLocaleString()}</span>`;
 
         const barcodeColorClass = item.ma_vach_valid === true ? 'text-green-600' : 'text-red-600';
         const generatedBarcode = item.ma_vach;
@@ -619,12 +665,12 @@ function renderChiTietTable() {
             <tr data-id="${item.id}" class="chi-tiet-row group">
                 <td class="p-1 border text-center align-top ${isViewMode ? '' : 'drag-handle cursor-move'}">${index + 1}</td>
                 <td class="p-1 border align-top relative">
-                    <input type="text" value="${item.ma_vt || ''}" class="w-full p-1 border rounded chi-tiet-input" data-field="ma_vt" autocomplete="off" ${isViewMode ? 'disabled' : ''}>
+                    <input type="text" value="${item.ma_vt || ''}" class="w-full p-1 border rounded chi-tiet-input" data-field="ma_vt" data-col="ma_vt" autocomplete="off" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top break-words">${item.ten_vt || ''}</td>
                 <td class="p-1 border align-top">
                     <div class="relative">
-                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" readonly placeholder="Chọn LOT..." ${isViewMode ? 'disabled' : ''}>
+                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Chọn LOT..." ${isViewMode ? 'disabled' : ''}>
                         <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
@@ -632,10 +678,10 @@ function renderChiTietTable() {
                 </td>
                 <td class="p-1 border align-top text-center">${item.date || ''}</td>
                 <td class="p-1 border align-top">
-                    <input type="number" value="${item.yc_sl || ''}" min="1" class="w-full p-1 border rounded chi-tiet-input" data-field="yc_sl" ${isViewMode ? 'disabled' : ''}>
+                    <input type="number" value="${item.yc_sl || ''}" min="1" class="w-full p-1 border rounded chi-tiet-input" data-field="yc_sl" data-col="yc_sl" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top">
-                    <input type="number" value="${(item.sl === null || item.sl === undefined) ? '' : item.sl}" min="0" class="w-full p-1 border rounded chi-tiet-input ${slColorClass}" data-field="sl" ${isViewMode ? 'disabled' : ''}>
+                    <input type="number" value="${(item.sl === null || item.sl === undefined) ? '' : item.sl}" min="0" class="w-full p-1 border rounded chi-tiet-input ${slColorClass}" data-field="sl" data-col="sl" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top chi-tiet-loai-cell">
                     <select class="w-full p-1 border rounded chi-tiet-input" data-field="loai" ${isViewMode ? 'disabled' : ''}>
@@ -653,7 +699,7 @@ function renderChiTietTable() {
                  <td colspan="10" class="px-2 py-1.5 text-xs text-gray-800 border border-t-0 border-blue-200">
                     <div class="flex justify-between items-center">
                         <div>
-                            <span class="font-semibold">${tonKhoInfo}</span> | <span class="font-semibold">${projectedStockText}</span>
+                            <span class="font-semibold">${tonKhoInfo}</span>${pendingInfo} | <span class="font-semibold">${projectedStockText}</span>
                         </div>
                         <div>
                             <span class="font-semibold">${trayInfo}</span>
@@ -668,9 +714,90 @@ function renderChiTietTable() {
     updateChiTietSummary();
 }
 
+/**
+ * Điều hướng thông minh:
+ * 1. Nhấn Tab khi có gợi ý: Chọn cái đầu tiên.
+ * 2. Điều hướng theo cột (xuống dòng) cho Ma VT, LOT, Y/c, Nhập.
+ */
+function handleSmartTabNavigation(event) {
+    if (event.key !== 'Tab') return;
+
+    const input = event.target;
+    const isShift = event.shiftKey;
+    if (isShift) return; // Để mặc định cho Shift+Tab
+
+    // --- 1. Xử lý khi có Popover Autocomplete hoặc Lot đang mở ---
+    const lotPopover = document.getElementById('lot-selector-popover');
+    const autocompletePopover = document.querySelector('.absolute.z-40.bg-white.border'); // Class mặc định của app.js openAutocomplete
+
+    if (lotPopover) {
+        const firstOption = lotPopover.querySelector('.lot-option');
+        if (firstOption) {
+            event.preventDefault();
+            firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            // Sau khi chọn LOT, tự động nhảy xuống dòng dưới (theo logic yêu cầu)
+            focusNextRowInput(input);
+            return;
+        }
+    }
+
+    if (autocompletePopover) {
+        const firstOption = autocompletePopover.querySelector('.autocomplete-option');
+        if (firstOption) {
+            event.preventDefault();
+            firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            
+            // Nếu là input trong bảng, nhảy xuống dòng dưới
+            if (input.dataset.col) {
+                focusNextRowInput(input);
+            } else {
+                // Nếu là input thông tin chung, để trình duyệt tự nhảy sang ô tiếp theo (ô mail/nx...)
+                // Nhưng ta đã preventDefault để chọn, nên phải focus thủ công ô tiếp theo
+                focusNextFormField(input);
+            }
+            return;
+        }
+    }
+
+    // --- 2. Xử lý nhảy xuống dòng dưới cho các cột đặc thù ---
+    const specialCols = ['ma_vt', 'lot', 'yc_sl', 'sl'];
+    const currentCol = input.dataset.col;
+
+    if (specialCols.includes(currentCol)) {
+        event.preventDefault();
+        focusNextRowInput(input);
+    }
+}
+
+function focusNextFormField(currentInput) {
+    const focusable = Array.from(document.querySelectorAll('#don-hang-form input, #don-hang-form select, #don-hang-form textarea'))
+        .filter(el => !el.disabled && el.tabIndex !== -1 && el.offsetParent !== null);
+    const index = focusable.indexOf(currentInput);
+    if (index > -1 && index < focusable.length - 1) {
+        focusable[index + 1].focus();
+    }
+}
+
+function focusNextRowInput(currentInput) {
+    const currentCol = currentInput.dataset.col;
+    const currentRow = currentInput.closest('tr.chi-tiet-row');
+    if (!currentRow) return;
+
+    const nextRow = currentRow.nextElementSibling?.nextElementSibling; // Nhảy qua dòng info
+    if (nextRow && nextRow.classList.contains('chi-tiet-row')) {
+        const nextInput = nextRow.querySelector(`[data-col="${currentCol}"]`);
+        if (nextInput) {
+            nextInput.focus();
+            if (nextInput.select) nextInput.select();
+        }
+    } else {
+        // Nếu là dòng cuối, có thể tự thêm dòng mới? (Tùy chọn, ở đây ta chỉ focus nút Thêm)
+        document.getElementById('don-hang-them-vat-tu-btn').focus();
+    }
+}
+
 function openLotSelectorPopover(inputElement, item) {
     closeActiveLotPopover();
-    const activeAutocompletePopover = 'dummy-value-to-prevent-double-open'; 
 
     const popoverTemplate = document.getElementById('autocomplete-popover-template');
     if (!popoverTemplate) return;
@@ -678,41 +805,85 @@ function openLotSelectorPopover(inputElement, item) {
     const popoverContent = popoverTemplate.content.cloneNode(true);
     const popover = popoverContent.querySelector('div');
     popover.id = 'lot-selector-popover';
-    popover.style.width = `350px`;
+    popover.style.width = `380px`;
+    popover.classList.remove('max-h-60'); 
 
     const rect = inputElement.getBoundingClientRect();
     popover.style.left = `${rect.left}px`;
     popover.style.top = `${rect.bottom + window.scrollY}px`;
     document.body.appendChild(popover);
 
+    const searchWrapper = document.createElement('div');
+    searchWrapper.className = 'p-2 border-b bg-gray-50 sticky top-0 z-20';
+    searchWrapper.innerHTML = `
+        <div class="relative">
+            <input type="text" class="lot-search-input w-full p-2 pr-8 text-sm border rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Tìm LOT hoặc Date (dd/mm/yyyy)...">
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+        </div>
+    `;
+    popover.prepend(searchWrapper);
+    
+    const searchInput = searchWrapper.querySelector('.lot-search-input');
     const optionsList = popover.querySelector('.autocomplete-options-list');
-    if (item.lotOptions && item.lotOptions.length > 0) {
-        item.lotOptions.sort((a, b) => b.ton_cuoi - a.ton_cuoi);
+    optionsList.classList.add('max-h-64', 'overflow-y-auto');
 
-        optionsList.innerHTML = item.lotOptions.map(opt => {
-            const tonKhoClass = opt.ton_cuoi > 0 ? 'text-green-600' : 'text-red-600';
-            const tinhTrangClass = getTinhTrangClass(opt.tinh_trang);
-            return `
-                <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 lot-option" data-ma-vach="${opt.ma_vach}">
-                    <div class="flex justify-between items-center text-sm font-medium gap-2">
-                        <span class="flex-1 text-left">LOT: ${opt.lot || 'Chưa có LOT'}</span>
-                        <div class="flex-1 flex justify-center items-center gap-2">
-                            <span class="text-green-600 font-semibold">N:${opt.nhap || 0}</span>
-                            <span class="text-red-600 font-semibold">X:${opt.xuat || 0}</span>
+    const renderOptions = (searchTerm = '') => {
+        const lowerSearch = searchTerm.toLowerCase();
+        const filteredOptions = (item.lotOptions || []).filter(opt => 
+            (opt.lot || '').toLowerCase().includes(lowerSearch) || 
+            (opt.date || '').toLowerCase().includes(lowerSearch)
+        );
+
+        if (filteredOptions.length > 0) {
+            filteredOptions.sort((a, b) => b.ton_cuoi - a.ton_cuoi);
+
+            optionsList.innerHTML = filteredOptions.map(opt => {
+                const tonKhoClass = opt.ton_cuoi > 0 ? 'text-green-600' : 'text-red-600';
+                const tinhTrangClass = getTinhTrangClass(opt.tinh_trang);
+                const pnd = opt.pendingData || { nhap: 0, xuat: 0 };
+
+                return `
+                    <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b last:border-b-0 lot-option" data-ma-vach="${opt.ma_vach}">
+                        <div class="flex justify-between items-center text-sm font-medium gap-2">
+                            <span class="flex-1 text-left">LOT: ${opt.lot || 'Chưa có LOT'}</span>
+                            <div class="flex-1 flex justify-center items-center gap-2">
+                                <span class="text-green-600 font-semibold" title="Chờ Nhập (Đơn khác)">CN:${pnd.nhap || 0}</span>
+                                <span class="text-red-600 font-semibold" title="Chờ Xuất (Đơn khác)">CX:${pnd.xuat || 0}</span>
+                            </div>
+                            <span class="flex-1 text-right ${tonKhoClass} font-bold">Tồn:${opt.ton_cuoi}</span>
                         </div>
-                        <span class="flex-1 text-right ${tonKhoClass} font-bold">Tồn:${opt.ton_cuoi}</span>
+                        <div class="flex justify-between items-center text-xs text-gray-500 mt-1">
+                            <span>${opt.date || 'No Date'}</span>
+                            <span class="${tinhTrangClass}">${opt.tinh_trang || 'N/A'}</span>
+                            <span>Tray: ${opt.tray || '?'}</span>
+                        </div>
                     </div>
-                    <div class="flex justify-between items-center text-xs text-gray-500 mt-1">
-                        <span>${opt.date || 'No Date'}</span>
-                        <span class="${tinhTrangClass}">${opt.tinh_trang || 'N/A'}</span>
-                        <span>Tray: ${opt.tray || '?'}</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    } else {
-        optionsList.innerHTML = '<div class="p-3 text-sm text-gray-500">Không có LOT nào cho Mã VT này.</div>';
-    }
+                `;
+            }).join('');
+        } else {
+            optionsList.innerHTML = '<div class="p-4 text-center text-sm text-gray-500 italic">Không tìm thấy LOT nào phù hợp.</div>';
+        }
+    };
+
+    renderOptions('');
+
+    searchInput.addEventListener('input', (e) => renderOptions(e.target.value));
+    
+    // Tab listener ngay trong popover để chuyển đổi linh hoạt
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            const firstOption = optionsList.querySelector('.lot-option');
+            if (firstOption) {
+                e.preventDefault();
+                firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                focusNextRowInput(inputElement);
+            }
+        }
+    });
+
+    setTimeout(() => searchInput.focus(), 50);
 
     const onSelect = (selectedMaVach) => {
         const selectedOptionData = item.lotOptions.find(opt => opt.ma_vach === selectedMaVach);
@@ -724,6 +895,7 @@ function openLotSelectorPopover(inputElement, item) {
             item.ten_vt = selectedOptionData.ten_vt;
             item.nganh = selectedOptionData.nganh;
             item.phu_trach = selectedOptionData.phu_trach;
+            item.pendingData = selectedOptionData.pendingData; 
             item.ma_vach_valid = true;
 
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
@@ -795,8 +967,13 @@ function generateMaKho(loai) {
 function generateMaNx(loai, nganh) {
     const prefix = loai === 'Nhap' ? 'RO' : 'DO';
     const year = new Date().getFullYear();
-    const nganhPart = nganh ? `${nganh}-` : '';
+    const nganhPart = nganh ? `${regexNganhToPrefix(nganh)}-` : '';
     return `${prefix}-${year}-${nganhPart}`;
+}
+
+function regexNganhToPrefix(nganh) {
+    if(!nganh) return '';
+    return nganh.substring(0, 3).toUpperCase();
 }
 
 async function generateUniqueMaKho(loai) {
@@ -974,8 +1151,18 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     };
     nganhInput.addEventListener('focus', handleNganhAutocomplete);
     nganhInput.addEventListener('input', debounce(handleNganhAutocomplete, 200));
+    
+    // CẬP NHẬT: Xử lý in hoa và không dấu cho ô Ngành
+    nganhInput.addEventListener('input', (e) => {
+        let val = e.target.value;
+        val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Loại bỏ dấu
+        val = val.replace(/đ/g, "d").replace(/Đ/g, "D"); // Xử lý chữ Đ
+        e.target.value = val.toUpperCase(); // Chuyển sang in hoa
+    });
+    
+    nganhInput.addEventListener('keydown', handleSmartTabNavigation);
 
-    // Yeu Cau Autocomplete (NÂNG CẤP)
+    // Yeu Cau Autocomplete
     const yeuCauInput = document.getElementById('don-hang-modal-yeu-cau');
     const handleYeuCauAutocomplete = () => {
         const inputValue = yeuCauInput.value.toLowerCase();
@@ -992,6 +1179,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     };
     yeuCauInput.addEventListener('focus', handleYeuCauAutocomplete);
     yeuCauInput.addEventListener('input', debounce(handleYeuCauAutocomplete, 200));
+    yeuCauInput.addEventListener('keydown', handleSmartTabNavigation);
     // --- END AUTOCOMPLETE LOGIC ---
 
     if (mode === 'add') {
@@ -1050,11 +1238,6 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         currentExistingFiles = [...filesFromDB];
 
         const fetchedChiTiet = await fetchChiTietDonHang(dh.ma_kho);
-        const loaiDon = dh.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
-
-        const originalQuantities = new Map(
-            fetchedChiTiet.map(item => [item.ma_vach, item.nhap || item.xuat])
-        );
         
         const maVtsInOrder = [...new Set(fetchedChiTiet.map(item => item.ma_vt).filter(Boolean))];
         let allMaVachsInOrder = [];
@@ -1065,11 +1248,13 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             }
         }
         
-        const reservedQuantities = await getReservedQuantitiesByMaVach(allMaVachsInOrder, dh.ma_kho);
+        const pendingAmounts = await getPendingAmountsByMaVach(allMaVachsInOrder, dh.ma_kho);
 
         const chiTietPromises = fetchedChiTiet.map(async (item) => {
             let lotOptions = [];
             let tonKhoData = null;
+            let currentPending = pendingAmounts.get(item.ma_vach) || { nhap: 0, xuat: 0 };
+
             if (item.ma_vt) {
                 const { data: lotData } = await sb.from('ton_kho_update')
                     .select('ma_vach, lot, date, ten_vt, tinh_trang, ton_cuoi, nganh, phu_trach, tray, nhap, xuat')
@@ -1077,14 +1262,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
 
                 if (lotData) {
                     const adjustedLotData = lotData.map(lot => {
-                        const originalQty = originalQuantities.get(lot.ma_vach);
-                        const reservedQty = reservedQuantities.get(lot.ma_vach) || 0;
-                        let adjustedTonCuoi = lot.ton_cuoi + reservedQty;
-                        
-                        if (originalQty && loaiDon === 'Xuat') {
-                            adjustedTonCuoi += originalQty;
-                        }
-                        return { ...lot, ton_cuoi: adjustedTonCuoi };
+                        return { ...lot, pendingData: pendingAmounts.get(lot.ma_vach) || { nhap: 0, xuat: 0 } };
                     });
                     
                     lotOptions = adjustedLotData;
@@ -1094,9 +1272,11 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             return { 
                 ...item, 
                 sl: item.nhap || item.xuat,
+                originalQty: item.nhap || item.xuat, // Ghi nhớ số lượng đang có của item trong đơn này
                 ma_vach_valid: true,
                 lotOptions: lotOptions,
                 tonKhoData: tonKhoData,
+                pendingData: currentPending 
             };
         });
         
@@ -1340,7 +1520,7 @@ async function handleSaveDonHang(e, printAction = null) {
         else showToast(`Lỗi: ${error.message}`, 'error');
         console.error("Save error:", error);
     } finally {
-        showLoading(false);
+        if (!printAction) showLoading(false); // Only stop loading if we're not about to print/preview
     }
 }
 
@@ -1382,6 +1562,7 @@ async function updateItemFromMaVt(item, ma_vt) {
     item.ma_vach = null;
     item.tonKhoData = null;
     item.lotOptions = [];
+    item.pendingData = { nhap: 0, xuat: 0 };
     item.ma_vach_valid = false;
     item.ten_vt = 'Đang tải...';
 
@@ -1395,11 +1576,12 @@ async function updateItemFromMaVt(item, ma_vt) {
     } else if (lotData && lotData.length > 0) {
         const ma_kho_orig = document.getElementById('don-hang-edit-mode-ma-kho').value;
         const allMaVachs = lotData.map(l => l.ma_vach);
-        const reservedQuantities = await getReservedQuantitiesByMaVach(allMaVachs, ma_kho_orig);
+        
+        // Luôn loại trừ ma_kho hiện tại khi tính số lượng chờ
+        const pendingAmounts = await getPendingAmountsByMaVach(allMaVachs, ma_kho_orig);
 
         const adjustedLotData = lotData.map(lot => {
-            const reservedQty = reservedQuantities.get(lot.ma_vach) || 0;
-            return { ...lot, ton_cuoi: lot.ton_cuoi + reservedQty };
+            return { ...lot, pendingData: pendingAmounts.get(lot.ma_vach) || { nhap: 0, xuat: 0 } };
         });
         
         item.lotOptions = adjustedLotData;
@@ -1726,7 +1908,7 @@ export function initDonHangView() {
                     let currentItem = chiTietItems[targetIndex];
 
                     if (!currentItem) {
-                        currentItem = { id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1 };
+                        currentItem = { id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } };
                         chiTietItems.push(currentItem);
                     }
 
@@ -1759,7 +1941,7 @@ export function initDonHangView() {
     }
 
     document.getElementById('don-hang-them-vat-tu-btn').addEventListener('click', () => {
-        chiTietItems.push({ id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1 });
+        chiTietItems.push({ id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } });
         renderChiTietTable();
     });
 
@@ -1837,7 +2019,24 @@ export function initDonHangView() {
                 }
             } else if (field === 'sl') {
                 const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
-                const availableStock = item.tonKhoData?.ton_cuoi || 0;
+                const actualStock = item.tonKhoData?.ton_cuoi || 0;
+                
+                // Tính toán Initial Total cho mã vạch này để lấy tồn trước đơn
+                const initialTotalForThisMaVach = initialChiTietItems
+                    .filter(initItem => initItem.ma_vach === item.ma_vach && item.ma_vach)
+                    .reduce((sum, initItem) => sum + (parseFloat(initItem.sl) || 0), 0);
+
+                let stockBeforeThisOrder;
+                if (loaiDon === 'Nhap') {
+                    stockBeforeThisOrder = actualStock - initialTotalForThisMaVach;
+                } else {
+                    stockBeforeThisOrder = actualStock + initialTotalForThisMaVach;
+                }
+
+                // Tổng số lượng của mã vạch này đang có trong TOÀN BỘ form UI
+                const currentTotalInUI = chiTietItems
+                    .filter(i => i && i.ma_vach === item.ma_vach && item.ma_vach)
+                    .reduce((sum, i) => sum + (parseFloat(i.sl) || 0), 0);
 
                  if (value < 0) {
                     showToast('Số lượng (SL) không được âm.', 'error');
@@ -1845,9 +2044,9 @@ export function initDonHangView() {
                  } else if (item.yc_sl && value > item.yc_sl) {
                     showToast('Số lượng (SL) không được lớn hơn Yêu cầu (Y/c).', 'error');
                     item.sl = oldValue || item.yc_sl;
-                 } else if (loaiDon === 'Xuat' && value > availableStock) {
-                    showToast(`Số lượng (SL) không được lớn hơn tồn kho (${availableStock}).`, 'error');
-                    item.sl = oldValue !== undefined ? oldValue : availableStock;
+                 } else if (loaiDon === 'Xuat' && currentTotalInUI > stockBeforeThisOrder) {
+                    showToast(`Tổng số lượng xuất (${currentTotalInUI}) vượt quá tồn kho (${stockBeforeThisOrder}).`, 'error');
+                    item.sl = oldValue !== undefined ? oldValue : 0;
                  }
             }
             renderChiTietTable();
@@ -1867,6 +2066,9 @@ export function initDonHangView() {
             await handleMaVtAutocomplete(input);
         }
     });
+
+    // Thêm listener điều hướng phím Tab cho các input trong bảng
+    chiTietBody.addEventListener('keydown', handleSmartTabNavigation);
 
     document.getElementById('don-hang-items-per-page').addEventListener('change', (e) => {
         viewStates['view-don-hang'].itemsPerPage = parseInt(e.target.value, 10); fetchDonHang(1); });
