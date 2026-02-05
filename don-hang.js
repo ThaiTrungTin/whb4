@@ -834,15 +834,15 @@ function openLotSelectorPopover(inputElement, item) {
             optionsList.innerHTML = filteredOptions.map(opt => {
                 const tonKhoClass = opt.ton_cuoi > 0 ? 'text-green-600' : 'text-red-600';
                 const tinhTrangClass = getTinhTrangClass(opt.tinh_trang);
-                const pnd = opt.pendingData || { nhap: 0, xuat: 0 };
+                // const pnd = opt.pendingData || { nhap: 0, xuat: 0 }; // Không hiển thị pending nữa
 
                 return `
                     <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b last:border-b-0 lot-option" data-ma-vach="${opt.ma_vach}">
                         <div class="flex justify-between items-center text-sm font-medium gap-2">
                             <span class="flex-1 text-left">LOT: ${opt.lot || 'Chưa có LOT'}</span>
                             <div class="flex-1 flex justify-center items-center gap-2">
-                                <span class="text-green-600 font-semibold" title="Chờ Nhập (Đơn khác)">CN:${pnd.nhap || 0}</span>
-                                <span class="text-red-600 font-semibold" title="Chờ Xuất (Đơn khác)">CX:${pnd.xuat || 0}</span>
+                                <span class="text-green-600 font-semibold" title="Tổng Nhập">N:${opt.nhap || 0}</span>
+                                <span class="text-red-600 font-semibold" title="Tổng Xuất">X:${opt.xuat || 0}</span>
                             </div>
                             <span class="flex-1 text-right ${tonKhoClass} font-bold">Tồn:${opt.ton_cuoi}</span>
                         </div>
@@ -2163,4 +2163,3 @@ export async function executeSaveOrderJob(payload) {
     const loai_don = donHangData.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
     await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
 }
-
