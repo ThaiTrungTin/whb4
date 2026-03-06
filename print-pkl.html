@@ -242,9 +242,11 @@
         <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg"
             alt="Logo" class="absolute top-6 left-10 w-24">
         <div id="qrcode" class="absolute top-6 right-6 w-16 h-16"></div>
-        <div id="total-info" class="absolute top-6 right-24 text-xs font-bold"
-            style="z-index:10; background:rgba(255,255,255,0.8); padding:2px; border-radius:2px;">SL: <span
-                id="header-total-sl"></span> / YC: <span id="header-total-ycsl"></span></div>
+
+        <!-- ĐÃ SỬA: Đổi ID và CSS để không bị mất khi in -->
+        <div id="total-info" class="absolute top-6 right-24 text-xs font-bold bg-white p-1 rounded-sm z-10">
+            SL: <span id="header-total-sl"></span> / YC: <span id="header-total-ycsl"></span>
+        </div>
 
         <div class="text-center mb-4">
             <h2 class="text-lg font-bold uppercase">PHIẾU LẤY HÀNG (PACKING LIST)</h2>
@@ -285,8 +287,9 @@
             <tfoot class="font-bold">
                 <tr class="bg-gray-100">
                     <td colspan="6" class="border border-black p-1 text-center">Tổng</td>
-                    <td id="total-ycsl" class="border border-black p-1 text-center"></td>
-                    <td id="total-sl" class="border border-black p-1 text-center"></td>
+                    <!-- ĐÃ SỬA: Đổi ID để tránh trùng lặp -->
+                    <td id="tfoot-total-ycsl" class="border border-black p-1 text-center"></td>
+                    <td id="tfoot-total-sl" class="border border-black p-1 text-center"></td>
                     <td class="border border-black p-1 text-center no-print"></td>
                 </tr>
             </tfoot>
@@ -406,10 +409,18 @@
                     </tr>
                 `;
             }).join('');
-            document.getElementById('total-sl').textContent = totalSl;
-            document.getElementById('total-ycsl').textContent = totalYcsl;
-            document.getElementById('header-total-sl').textContent = totalSl;
-            document.getElementById('header-total-ycsl').textContent = totalYcsl;
+
+            // ĐÃ SỬA: Cập nhật số lượng ở Header
+            const headerTotalSl = document.getElementById('header-total-sl');
+            const headerTotalYcsl = document.getElementById('header-total-ycsl');
+            if (headerTotalSl) headerTotalSl.textContent = totalSl;
+            if (headerTotalYcsl) headerTotalYcsl.textContent = totalYcsl;
+
+            // ĐÃ SỬA: Cập nhật số lượng ở Footer bảng
+            const tfootTotalSl = document.getElementById('tfoot-total-sl');
+            const tfootTotalYcsl = document.getElementById('tfoot-total-ycsl');
+            if (tfootTotalSl) tfootTotalSl.textContent = totalSl;
+            if (tfootTotalYcsl) tfootTotalYcsl.textContent = totalYcsl;
 
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('printable-area').classList.remove('hidden');
@@ -444,7 +455,8 @@
                                 <div class="h-8 w-full"></div> 
                                 <span class="text-3xl font-black tracking-tight leading-none break-words -mt-1 mix-blend-multiply text-black">${item.ma_vt}</span>
                             </div>
-                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white/80 backdrop-blur-[1px]">
+                            <!-- ĐÃ SỬA: Bỏ backdrop-blur và opacity để in không bị mất chữ -->
+                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white">
                                 <div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>
                                 <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
                             </div>
@@ -487,7 +499,6 @@
 
             labelArea.innerHTML = '';
 
-            // CẬP NHẬT: Thêm đường kẻ nét đứt (vách ngăn) giữa logo và mã NX
             const shippingLabelHTML = `
                 <div class="shipping-label">
                     <div class="sl-header">
