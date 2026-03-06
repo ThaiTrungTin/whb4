@@ -1,11 +1,12 @@
-
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phiếu Lấy Hàng & In Tem</title>
-    <link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
+    <link rel="icon" type="image/png"
+        href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -13,35 +14,59 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         /* CSS cho màn hình thường */
-        body { background-color: #f0f2f5; font-family: 'Times New Roman', Times, serif; }
-        
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Times New Roman', Times, serif;
+        }
+
         /* Khu vực phiếu A4 */
-        #printable-area { width: 210mm; min-height: 297mm; padding: 15mm; margin: 10mm auto; border: 1px #D1D1D1 solid; background: white; box-shadow: 0 0 5px rgba(0, 0, 0, 0.1); }
-        table { font-size: 10px; }
-        th, td { padding: 4px; }
+        #printable-area {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            border: 1px #D1D1D1 solid;
+            background: white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            font-size: 10px;
+        }
+
+        th,
+        td {
+            padding: 4px;
+        }
 
         /* Khu vực Tem (mặc định ẩn trên màn hình) */
-        #label-area { display: none; width: 80mm; margin: 0 auto; background: white; padding: 10px; }
-        
+        #label-area {
+            display: none;
+            width: 80mm;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+        }
+
         /* Thiết kế Tem SP (Tem nhỏ) */
         .label-item {
-            width: 70mm; 
-            padding: 6px; 
-            margin-bottom: 5mm; 
-            font-family: Tahoma, sans-serif; 
-            page-break-inside: avoid; 
+            width: 70mm;
+            padding: 6px;
+            margin-bottom: 5mm;
+            font-family: Tahoma, sans-serif;
+            page-break-inside: avoid;
             break-inside: avoid;
             display: block;
             background: white;
             box-sizing: border-box;
-            position: relative; 
+            position: relative;
         }
 
         /* Thiết kế Phiếu Vận Chuyển */
         .shipping-label {
-            width: 70mm; 
+            width: 70mm;
             min-height: 70mm;
-            border: 1px solid black; 
+            border: 1px solid black;
             font-family: Tahoma, sans-serif;
             background: white;
             display: flex;
@@ -49,21 +74,25 @@
             page-break-after: always;
             box-sizing: border-box;
         }
+
         .sl-header {
-            padding: 0; 
+            padding: 0;
             display: flex;
-            justify-content: center; 
+            justify-content: center;
             align-items: center;
             overflow: hidden;
-            height: 50px; 
+            height: 50px;
         }
+
         .sl-section {
             border-bottom: 1px dashed black;
-            padding: 3px 8px; 
+            padding: 3px 8px;
         }
+
         .sl-section:last-child {
             border-bottom: none;
         }
+
         .sl-title {
             font-size: 10px;
             color: black;
@@ -71,6 +100,7 @@
             font-weight: bold;
             margin-bottom: 1px;
         }
+
         .sl-content {
             font-size: 14px;
             font-weight: bold;
@@ -82,74 +112,124 @@
 
         /* --- CẤU HÌNH IN ẤN SIÊU NÉT (PIXEL PERFECT) --- */
         @media print {
-            body { 
-                background-color: white; 
-                -webkit-print-color-adjust: exact; 
+            body {
+                background-color: white;
+                -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            .no-print { display: none !important; } 
-            
-            body:not(.printing-labels) #printable-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; margin: 0; border: none; box-shadow: none; }
-            body:not(.printing-labels) #label-area { display: none !important; }
 
-            body.printing-labels #printable-area { display: none !important; }
-            body.printing-labels #label-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
-            
+            .no-print {
+                display: none !important;
+            }
+
+            body:not(.printing-labels) #printable-area {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                border: none;
+                box-shadow: none;
+            }
+
+            body:not(.printing-labels) #label-area {
+                display: none !important;
+            }
+
+            body.printing-labels #printable-area {
+                display: none !important;
+            }
+
+            body.printing-labels #label-area {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+
             @page {
-                margin: 0; 
+                margin: 0;
                 size: auto;
             }
-            
-            body.printing-labels #label-area > div { 
-                margin-left: 2mm; 
-                margin-top: 2mm; 
-            }
-            body.printing-labels .label-item { margin-bottom: 5mm; }
 
-            .label-item, .shipping-label {
+            body.printing-labels #label-area>div {
+                margin-left: 2mm;
+                margin-top: 2mm;
+            }
+
+            body.printing-labels .label-item {
+                margin-bottom: 5mm;
+            }
+
+            .label-item,
+            .shipping-label {
                 -webkit-font-smoothing: none !important;
                 font-smooth: never !important;
-                text-rendering: optimizeSpeed !important; 
+                text-rendering: optimizeSpeed !important;
                 color: #000000 !important;
             }
-            
-            .label-item *, .shipping-label * {
-                 shape-rendering: crispEdges !important;
+
+            .label-item *,
+            .shipping-label * {
+                shape-rendering: crispEdges !important;
             }
 
-            .text-xs, .text-sm, .text-base, .sl-title, .sl-content {
-                font-weight: 700 !important; 
+            .text-xs,
+            .text-sm,
+            .text-base,
+            .sl-title,
+            .sl-content {
+                font-weight: 700 !important;
             }
-            
-            .text-3xl, .text-4xl {
+
+            .text-3xl,
+            .text-4xl {
                 font-weight: 900 !important;
             }
 
             img {
                 filter: grayscale(100%) contrast(300%) brightness(90%) !important;
-                image-rendering: pixelated !important; 
+                image-rendering: pixelated !important;
             }
         }
     </style>
 </head>
+
 <body class="text-xs">
 
     <!-- Toolbar -->
-    <div id="toolbar" class="no-print bg-white p-4 shadow-md sticky top-0 z-50 flex items-center justify-center gap-3 flex-wrap">
-        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">In Phiếu (A4)</button>
-        <button id="print-selected-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+    <div id="toolbar"
+        class="no-print bg-white p-4 shadow-md sticky top-0 z-50 flex items-center justify-center gap-3 flex-wrap">
+        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">In
+            Phiếu (A4)</button>
+        <button id="print-selected-btn"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
             In Tem (Đã chọn)
         </button>
-        <button id="print-shipping-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+        <button id="print-shipping-btn"
+            class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
             In Phiếu Vận Chuyển
         </button>
-        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow">Xuất PDF</button>
+        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow">Xuất
+            PDF</button>
     </div>
-    
-    <div id="loading-state" class="text-center p-10"><p class="text-gray-600">Đang tải dữ liệu phiếu lấy hàng...</p></div>
-    
+
+    <div id="loading-state" class="text-center p-10">
+        <p class="text-gray-600">Đang tải dữ liệu phiếu lấy hàng...</p>
+    </div>
+
     <div id="error-state" class="hidden text-center p-10 bg-red-100 text-red-700 w-1/2 mx-auto mt-10 rounded-lg">
         <p class="font-bold">Không thể tải dữ liệu</p>
         <p id="error-message">Mã đơn hàng không hợp lệ hoặc không tồn tại.</p>
@@ -159,21 +239,29 @@
     <div id="label-area"></div>
 
     <div id="printable-area" class="hidden relative">
-        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg" alt="Logo" class="absolute top-6 left-10 w-24">
+        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg"
+            alt="Logo" class="absolute top-6 left-10 w-24">
         <div id="qrcode" class="absolute top-6 right-6 w-16 h-16"></div>
+        <div id="total-info" class="absolute top-6 right-24 text-xs font-bold"
+            style="z-index:10; background:rgba(255,255,255,0.8); padding:2px; border-radius:2px;">SL: <span
+                id="header-total-sl"></span> / YC: <span id="header-total-ycsl"></span></div>
 
         <div class="text-center mb-4">
             <h2 class="text-lg font-bold uppercase">PHIẾU LẤY HÀNG (PACKING LIST)</h2>
-            <p class="text-xs">Số Phiếu: <strong id="info-ma-kho" class="uppercase"></strong> - Mã NX: <strong id="info-ma-nx" class="uppercase"></strong></p>
+            <p class="text-xs">Số Phiếu: <strong id="info-ma-kho" class="uppercase"></strong> - Mã NX: <strong
+                    id="info-ma-nx" class="uppercase"></strong></p>
             <p id="info-date" class="text-[10px] italic"></p>
         </div>
 
         <div class="mb-4 text-xs">
-             <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1">
-                <div class="font-bold">Người yêu cầu:</div><div id="info-yeu-cau"></div>
-                <div class="font-bold">Bộ Phận:</div><div id="info-nganh"></div>
-                <div class="font-bold align-top">Mục Đích:</div><div id="info-muc-dich"></div>
-             </div>
+            <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1">
+                <div class="font-bold">Người yêu cầu:</div>
+                <div id="info-yeu-cau"></div>
+                <div class="font-bold">Bộ Phận:</div>
+                <div id="info-nganh"></div>
+                <div class="font-bold align-top">Mục Đích:</div>
+                <div id="info-muc-dich"></div>
+            </div>
         </div>
 
         <table class="w-full border-collapse">
@@ -188,26 +276,36 @@
                     <th class="border border-black p-1 text-center" style="width: 6%;">Y/C</th>
                     <th class="border border-black p-1 text-center" style="width: 6%;">SL</th>
                     <th class="border border-black p-1 text-center no-print" style="width: 4%;">
-                        <input type="checkbox" id="select-all" class="w-4 h-4 cursor-pointer accent-blue-600" title="Chọn tất cả (Không in ngay)">
-                    </th> 
+                        <input type="checkbox" id="select-all" class="w-4 h-4 cursor-pointer accent-blue-600"
+                            title="Chọn tất cả (Không in ngay)">
+                    </th>
                 </tr>
             </thead>
             <tbody id="chi-tiet-table-body"></tbody>
             <tfoot class="font-bold">
-                 <tr class="bg-gray-100">
+                <tr class="bg-gray-100">
                     <td colspan="6" class="border border-black p-1 text-center">Tổng</td>
                     <td id="total-ycsl" class="border border-black p-1 text-center"></td>
                     <td id="total-sl" class="border border-black p-1 text-center"></td>
-                    <td class="border border-black p-1 text-center no-print"></td> 
+                    <td class="border border-black p-1 text-center no-print"></td>
                 </tr>
             </tfoot>
         </table>
 
         <div class="pt-8 mt-8">
             <div class="flex justify-around text-center text-sm">
-                <div><p class="font-bold">Người lập phiếu</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
-                <div><p class="font-bold">Người lấy hàng</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
-                <div><p class="font-bold">Thủ kho</p><p class="italic mt-12">(Ký, ghi rõ họ tên)</p></div>
+                <div>
+                    <p class="font-bold">Người lập phiếu</p>
+                    <p class="italic mt-12">(Ký, ghi rõ họ tên)</p>
+                </div>
+                <div>
+                    <p class="font-bold">Người lấy hàng</p>
+                    <p class="italic mt-12">(Ký, ghi rõ họ tên)</p>
+                </div>
+                <div>
+                    <p class="font-bold">Thủ kho</p>
+                    <p class="italic mt-12">(Ký, ghi rõ họ tên)</p>
+                </div>
             </div>
         </div>
     </div>
@@ -237,7 +335,7 @@
 
                 const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').eq('ma_kho', ma_kho).order('stt', { ascending: true });
                 if (ctError) throw new Error(ctError.message);
-                
+
                 const maVachList = ctData.map(item => item.ma_vach).filter(Boolean);
                 let tonKhoMap = new Map();
 
@@ -286,7 +384,7 @@
                 const yc_sl = item.yc_sl || 0;
                 totalSl += sl;
                 totalYcsl += yc_sl;
-                
+
                 return `
                     <tr class="h-8 hover:bg-gray-50">
                         <td class="border border-black p-1 text-center">${item.stt || index + 1}</td>
@@ -310,6 +408,8 @@
             }).join('');
             document.getElementById('total-sl').textContent = totalSl;
             document.getElementById('total-ycsl').textContent = totalYcsl;
+            document.getElementById('header-total-sl').textContent = totalSl;
+            document.getElementById('header-total-ycsl').textContent = totalYcsl;
 
             document.getElementById('loading-state').classList.add('hidden');
             document.getElementById('printable-area').classList.remove('hidden');
@@ -369,11 +469,11 @@
             `;
         }
 
-        window.handlePrintShippingLabel = function() {
+        window.handlePrintShippingLabel = function () {
             const labelArea = document.getElementById('label-area');
             const dhData = window.globalDhData;
             const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
-            
+
             const nganh = (dhData.nganh || '').trim();
             const yeu_cau = (dhData.yeu_cau || '').trim();
             const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
@@ -418,9 +518,9 @@
                     </div>
                 </div>
             `;
-            
+
             labelArea.innerHTML = shippingLabelHTML;
-            
+
             setTimeout(() => {
                 document.body.classList.add('printing-labels');
                 setTimeout(() => {
@@ -430,15 +530,15 @@
             }, 100);
         };
 
-        window.printSingleLabelIfChecked = function(index, checkbox) {
+        window.printSingleLabelIfChecked = function (index, checkbox) {
             if (!checkbox.checked) return;
             if (window.isSelectingAll) return;
 
             const item = window.globalCtData[index];
             const labelArea = document.getElementById('label-area');
-            
+
             labelArea.innerHTML = generateLabelHTML(item);
-            
+
             document.body.classList.add('printing-labels');
             setTimeout(() => {
                 window.print();
@@ -446,7 +546,7 @@
             }, 100);
         };
 
-        window.handlePrintSelectedLabels = function() {
+        window.handlePrintSelectedLabels = function () {
             const checkboxes = document.querySelectorAll('.print-checkbox:checked');
             const labelArea = document.getElementById('label-area');
             labelArea.innerHTML = '';
@@ -472,22 +572,22 @@
         };
 
         window.isSelectingAll = false;
-        document.getElementById('select-all').addEventListener('change', function(e) {
+        document.getElementById('select-all').addEventListener('change', function (e) {
             window.isSelectingAll = true;
             const isChecked = e.target.checked;
             const checkboxes = document.querySelectorAll('.print-checkbox');
-            
+
             checkboxes.forEach(cb => {
                 cb.checked = isChecked;
             });
-            
+
             setTimeout(() => { window.isSelectingAll = false; }, 100);
         });
 
         async function handlePdfExport() {
             const printableArea = document.getElementById('printable-area');
             const ma_kho = new URLSearchParams(window.location.search).get('ma_kho') || 'document';
-            
+
             const bgElements = printableArea.querySelectorAll('.bg-gray-100');
             bgElements.forEach(el => el.style.backgroundColor = '#f3f4f6');
             const fontElements = printableArea.querySelectorAll('.font-bold');
@@ -511,7 +611,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchAndRenderData();
-            
+
             document.getElementById('print-btn').addEventListener('click', () => {
                 document.body.classList.remove('printing-labels');
                 window.print();
@@ -523,4 +623,5 @@
         });
     </script>
 </body>
+
 </html>
