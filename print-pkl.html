@@ -190,8 +190,7 @@
             }
 
             img {
-                filter: grayscale(100%) contrast(300%) brightness(90%) !important;
-                image-rendering: pixelated !important;
+                filter: grayscale(100%) contrast(200%) !important;
             }
         }
     </style>
@@ -240,10 +239,9 @@
 
     <div id="printable-area" class="hidden relative">
         <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg"
-            alt="Logo" class="absolute top-6 left-10 w-24">
+            alt="Logo" class="absolute top-4 left-8 w-36">
         <div id="qrcode" class="absolute top-6 right-6 w-16 h-16"></div>
 
-        <!-- ĐÃ SỬA: Đổi ID và CSS để không bị mất khi in -->
         <div id="total-info" class="absolute top-6 right-24 text-xs font-bold bg-white p-1 rounded-sm z-10">
             SL: <span id="header-total-sl"></span> / YC: <span id="header-total-ycsl"></span>
         </div>
@@ -287,7 +285,6 @@
             <tfoot class="font-bold">
                 <tr class="bg-gray-100">
                     <td colspan="6" class="border border-black p-1 text-center">Tổng</td>
-                    <!-- ĐÃ SỬA: Đổi ID để tránh trùng lặp -->
                     <td id="tfoot-total-ycsl" class="border border-black p-1 text-center"></td>
                     <td id="tfoot-total-sl" class="border border-black p-1 text-center"></td>
                     <td class="border border-black p-1 text-center no-print"></td>
@@ -410,13 +407,11 @@
                 `;
             }).join('');
 
-            // ĐÃ SỬA: Cập nhật số lượng ở Header
             const headerTotalSl = document.getElementById('header-total-sl');
             const headerTotalYcsl = document.getElementById('header-total-ycsl');
             if (headerTotalSl) headerTotalSl.textContent = totalSl;
             if (headerTotalYcsl) headerTotalYcsl.textContent = totalYcsl;
 
-            // ĐÃ SỬA: Cập nhật số lượng ở Footer bảng
             const tfootTotalSl = document.getElementById('tfoot-total-sl');
             const tfootTotalYcsl = document.getElementById('tfoot-total-ycsl');
             if (tfootTotalSl) tfootTotalSl.textContent = totalSl;
@@ -447,22 +442,20 @@
                 <div class="label-item">
                     <div class="absolute inset-0 border border-black z-50 pointer-events-none"></div>
                     
-                    <img src="${logoUrl}" class="absolute top-1 left-1 h-9 w-auto object-contain grayscale z-0 opacity-100" style="filter: grayscale(100%) contrast(300%) brightness(90%);" alt="Logo">
-                    
                     <div class="relative z-10">
-                        <div class="flex justify-between items-start border-b border-black pb-1 mb-2">
-                            <div class="flex flex-col max-w-[75%]">
-                                <div class="h-8 w-full"></div> 
-                                <span class="text-3xl font-black tracking-tight leading-none break-words -mt-1 mix-blend-multiply text-black">${item.ma_vt}</span>
+                        <div class="flex justify-between items-start border-b border-black pb-1 mb-1">
+                            <!-- ĐÃ SỬA: Bỏ absolute, đưa logo vào luồng chuẩn. Thêm -ml-2 để kéo chữ J sát lề trái -->
+                            <div class="flex flex-col max-w-[75%] pt-1">
+                                <img src="${logoUrl}" class="w-32 h-auto object-contain mb-1 -ml-2" alt="Logo">
+                                <span class="text-3xl font-black tracking-tight leading-none break-words text-black">${item.ma_vt}</span>
                             </div>
-                            <!-- ĐÃ SỬA: Bỏ backdrop-blur và opacity để in không bị mất chữ -->
-                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white">
+                            <div class="text-right text-xs leading-tight min-w-[50px] bg-white mt-1">
                                 <div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>
                                 <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-2 text-xs font-bold mb-2 pb-1 border-b border-black border-dashed text-black">
+                        <div class="grid grid-cols-2 text-xs font-bold mb-1 pb-1 border-b border-black border-dashed text-black">
                             <div class="text-left whitespace-nowrap overflow-hidden text-ellipsis pr-1">LOT: ${item.lot || ''}</div>
                             <div class="text-right whitespace-nowrap overflow-hidden text-ellipsis pl-1">DATE: ${item.date || ''}</div>
                         </div>
@@ -493,7 +486,6 @@
             const muc_dich = (dhData.muc_dich || '').trim();
             const ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
 
-            // Tính toán font-size động cho Mã NX để luôn nằm trên 1 hàng và không bị khuất
             const ma_nx_len = ma_nx.length || 1;
             const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
 
@@ -502,9 +494,8 @@
             const shippingLabelHTML = `
                 <div class="shipping-label">
                     <div class="sl-header">
-                        <img src="${logoUrl}" class="w-full h-auto grayscale block" style="filter: grayscale(100%) contrast(300%) brightness(90%);" alt="Logo">
+                        <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
                     </div>
-                    <!-- Vách ngăn dashed -->
                     <div class="border-t border-dashed border-black w-full"></div>
                     <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
                          <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
