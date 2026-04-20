@@ -1973,7 +1973,11 @@ export function initDonHangView() {
             const selectedIds = [...viewStates['view-don-hang'].selected];
             if (selectedIds.length > 0) {
                 const ma_kho_list = selectedIds.join(',');
-                openPrintPreviewModal(`print-pkl.html?ma_kho=${ma_kho_list}&mode=shipping`, `In Nhãn Vận Chuyển`);
+                // Nạp URL vào iframe ẩn để hiện hộp thoại in mà không cần mở tab mới
+                const printIframe = document.getElementById('print-iframe');
+                if (printIframe) {
+                    printIframe.src = `print-pkl.html?ma_kho=${ma_kho_list}&mode=shipping&t=${Date.now()}`;
+                }
             }
         });
     }

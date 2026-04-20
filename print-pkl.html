@@ -518,17 +518,14 @@
                 let yeu_cau = headerMatch ? headerMatch[3].trim() : 'N/A';
                 let yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
 
-                // Parse Nội dung :
-                const contentMatch = block.match(/Nội dung\s*:\s*([^\n]+)/i);
+                // Parse Nội dung : (Captures everything until "Gửi :" or end of block)
+                const contentMatch = block.match(/Nội dung\s*:\s*([\s\S]*?)(?=Gửi\s*:|$)/i);
                 let muc_dich = contentMatch ? contentMatch[1].trim() : '';
 
-                // Parse Gửi :
-                const guiMatch = block.match(/Gửi\s*:\s*([^\n]+)/i);
+                // Parse Gửi : (Captures everything until "Số Lượng :" or end of block)
+                const guiMatch = block.match(/Gửi\s*:\s*([\s\S]*?)(?=Số Lượng\s*:|$)/i);
                 let diaChi = guiMatch ? guiMatch[1].trim() : '...................................';
                 
-                // Loại bỏ dòng "Số Lượng" nếu nó lọt vào diaChi
-                diaChi = diaChi.replace(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i, '').trim();
-
                 // Parse Số Lượng : 
                 const slMatch = block.match(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i);
                 let totalKien = 1;

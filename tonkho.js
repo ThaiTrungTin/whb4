@@ -255,7 +255,7 @@ function renderTonKhoTable(data) {
                     <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">
                         <div class="flex items-center justify-between group">
                             <span>${tk.ma_vt}</span>
-                            <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" data-ma-vt="${tk.ma_vt}" title="Copy mã">
+                            <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600" data-ma-vt="${tk.ma_vt}" title="Copy mã">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-3 8h6m-6 4h6m-6-8h6"></path></svg>
                             </button>
                         </div>
