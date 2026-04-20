@@ -277,7 +277,7 @@ export function updateSidebarAvatar(url) {
     document.getElementById('sidebar-avatar').src = url || DEFAULT_AVATAR_URL;
 }
 
-function updateFilterButtonTexts(viewPrefix) {
+export function updateFilterButtonTexts(viewPrefix) {
     const state = viewStates[`view-${viewPrefix}`];
     if (!state) return;
     

@@ -1,5 +1,6 @@
-import { sb, currentUser, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, filterButtonDefaultTexts, openAutocomplete, updateTonKhoToggleUI, openTonKhoFilterPopover } from './app.js';
+import { sb, currentUser, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, filterButtonDefaultTexts, openAutocomplete, updateTonKhoToggleUI, openTonKhoFilterPopover, updateFilterButtonTexts, showView } from './app.js';
 import { fetchSanPham } from './sanpham.js';
+import { fetchChiTiet } from './chitiet.js';
 
 const debouncedValidateMaVach = debounce(async (ma_vach) => {
     const statusEl = document.getElementById('ton-kho-modal-ma-vach-status');
@@ -254,14 +255,23 @@ function renderTonKhoTable(data) {
                     <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left cursor-pointer text-blue-600 hover:underline ma-vach-cell">${tk.ma_vach}</td>
                     <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">
                         <div class="flex items-center justify-between group">
-                            <span>${tk.ma_vt}</span>
+                            <span class="cursor-pointer text-blue-600 font-bold hover:underline ton-kho-view-details-btn" data-ma-vt="${tk.ma_vt}">${tk.ma_vt}</span>
                             <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600" data-ma-vt="${tk.ma_vt}" title="Copy mã">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-3 8h6m-6 4h6m-6-8h6"></path></svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             </button>
                         </div>
                     </td>
                     <td class="px-1 py-2 text-sm text-gray-600 break-words border border-gray-300 text-left">${tk.ten_vt}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.lot || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">
+                        <div class="flex items-center justify-center group gap-1">
+                            <span class="cursor-pointer text-blue-600 hover:underline ton-kho-view-lot-details-btn" data-ma-vt="${tk.ma_vt}" data-lot="${tk.lot || ''}">${tk.lot || ''}</span>
+                            ${tk.lot ? `
+                            <button class="ton-kho-copy-lot-btn p-1 text-gray-400 hover:text-blue-600" data-lot="${tk.lot}" title="Copy LOT">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                            ` : ''}
+                        </div>
+                    </td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.date || ''}</td>
                     <td class="px-2 py-2 text-sm text-black font-bold border border-gray-300 text-center">${tk.ton_dau}</td>
                     <td class="px-2 py-2 text-sm text-green-600 border border-gray-300 text-center">${tk.nhap}</td>
@@ -467,27 +477,6 @@ function applyTonKhoColumnState() {
     btn.textContent = isCollapsed ? '[+]' : '[-]';
 }
 
-function updateFilterButtonTexts(viewPrefix) {
-    const state = viewStates[`view-${viewPrefix}`];
-    if (!state) return;
-    
-    const viewContainer = document.getElementById(`view-${viewPrefix}`);
-    if (!viewContainer) return;
-
-    viewContainer.querySelectorAll('.filter-btn').forEach(btn => {
-        const filterKey = btn.dataset.filterKey;
-        if (filterKey && state.filters.hasOwnProperty(filterKey)) {
-            const selectedOptions = state.filters[filterKey] || [];
-            const defaultText = filterButtonDefaultTexts[btn.id] || 'Filter';
-            
-            if (filterKey.includes('date') && selectedOptions) {
-                 btn.textContent = defaultText; 
-            } else if (Array.isArray(selectedOptions)) {
-                btn.textContent = selectedOptions.length > 0 ? `${defaultText} (${selectedOptions.length})` : defaultText;
-            }
-        }
-    });
-}
 
 export function initTonKhoView() {
     const viewContainer = document.getElementById('view-ton-kho');
@@ -551,36 +540,90 @@ export function initTonKhoView() {
     const tableBody = document.getElementById('ton-kho-table-body');
     if (tableBody) {
         tableBody.addEventListener('click', async e => {
-        const copyBtn = e.target.closest('.ton-kho-copy-ma-vt-btn');
-        if (copyBtn) {
-            e.stopPropagation();
-            const maVt = copyBtn.dataset.maVt;
-            navigator.clipboard.writeText(maVt).then(() => {
-                showToast(`Đã copy mã: ${maVt}`, 'success');
-            });
-            return;
-        }
+            // Copy Mã VT
+            const copyBtn = e.target.closest('.ton-kho-copy-ma-vt-btn');
+            if (copyBtn) {
+                e.stopPropagation();
+                const maVt = copyBtn.dataset.maVt;
+                navigator.clipboard.writeText(maVt).then(() => {
+                    showToast(`Đã copy mã VT: ${maVt}`, 'success');
+                });
+                return;
+            }
 
-        const row = e.target.closest('tr');
-        if (!row || !row.dataset.id) return;
-        const id = row.dataset.id;
-        
-        if (e.target.closest('.ma-vach-cell')) {
-            const { data } = await sb.from('ton_kho').select('*').eq('ma_vach', id).single();
-            if(data) openTonKhoModal(data, 'view');
-            return;
-        }
+            // Copy LOT
+            const copyLotBtn = e.target.closest('.ton-kho-copy-lot-btn');
+            if (copyLotBtn) {
+                e.stopPropagation();
+                const lot = copyLotBtn.dataset.lot;
+                navigator.clipboard.writeText(lot).then(() => {
+                    showToast(`Đã copy LOT: ${lot}`, 'success');
+                });
+                return;
+            }
 
-        const checkbox = row.querySelector('.ton-kho-select-row');
-        if (e.target.type !== 'checkbox') {
-            checkbox.checked = !checkbox.checked;
-        }
-        
-        viewStates['view-ton-kho'].selected[checkbox.checked ? 'add' : 'delete'](id);
-        row.classList.toggle('bg-blue-100', checkbox.checked);
-        updateTonKhoActionButtonsState();
-        updateTonKhoSelectionInfo();
-    });
+            // Xem thẻ kho (Cửa sổ Chi Tiết -> Lọc Mã VT)
+            const viewDetailsBtn = e.target.closest('.ton-kho-view-details-btn');
+            if (viewDetailsBtn) {
+                e.stopPropagation();
+                const ma_vt = viewDetailsBtn.dataset.maVt;
+                if (!ma_vt) return;
+
+                const chiTietState = viewStates['view-chi-tiet'];
+                chiTietState.searchTerm = '';
+                chiTietState.currentPage = 1;
+                chiTietState.filters = { from_date: '', to_date: '', ma_kho: [], ma_nx: [], ma_vt: [ma_vt], lot: [], nganh: [], phu_trach: [] };
+                
+                await showView('view-chi-tiet');
+                updateFilterButtonTexts('chi-tiet');
+                fetchChiTiet(1);
+                return;
+            }
+
+            // Xem chi tiết LOT (Cửa sổ Chi Tiết -> Lọc Mã VT + LOT)
+            const viewLotDetailsBtn = e.target.closest('.ton-kho-view-lot-details-btn');
+            if (viewLotDetailsBtn) {
+                e.stopPropagation();
+                const ma_vt = viewLotDetailsBtn.dataset.maVt;
+                const lot = viewLotDetailsBtn.dataset.lot;
+                if (!ma_vt) return;
+
+                const chiTietState = viewStates['view-chi-tiet'];
+                chiTietState.searchTerm = '';
+                chiTietState.currentPage = 1;
+                chiTietState.filters = { 
+                    from_date: '', to_date: '', ma_kho: [], ma_nx: [], 
+                    ma_vt: [ma_vt], 
+                    lot: lot ? [lot] : [], 
+                    nganh: [], phu_trach: [] 
+                };
+                
+                await showView('view-chi-tiet');
+                updateFilterButtonTexts('chi-tiet');
+                fetchChiTiet(1);
+                return;
+            }
+
+            const row = e.target.closest('tr');
+            if (!row || !row.dataset.id) return;
+            const id = row.dataset.id;
+            
+            if (e.target.closest('.ma-vach-cell')) {
+                const { data } = await sb.from('ton_kho').select('*').eq('ma_vach', id).single();
+                if(data) openTonKhoModal(data, 'view');
+                return;
+            }
+
+            const checkbox = row.querySelector('.ton-kho-select-row');
+            if (e.target.type !== 'checkbox') {
+                checkbox.checked = !checkbox.checked;
+            }
+            
+            viewStates['view-ton-kho'].selected[checkbox.checked ? 'add' : 'delete'](id);
+            row.classList.toggle('bg-blue-100', checkbox.checked);
+            updateTonKhoActionButtonsState();
+            updateTonKhoSelectionInfo();
+        });
     }
 
     const selectAllCb = document.getElementById('ton-kho-select-all');
