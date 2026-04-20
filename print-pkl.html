@@ -750,6 +750,21 @@
             }
         }
 
+        // Chức năng Zoom nội bộ bằng CSS để không ảnh hưởng đến trang web chính
+        let currentZoom = 1;
+        window.addEventListener('wheel', (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    currentZoom += 0.05;
+                } else {
+                    currentZoom -= 0.05;
+                }
+                currentZoom = Math.min(Math.max(0.3, currentZoom), 3);
+                document.body.style.zoom = currentZoom;
+            }
+        }, { passive: false });
+
         document.addEventListener('DOMContentLoaded', () => {
             fetchAndRenderData();
 
