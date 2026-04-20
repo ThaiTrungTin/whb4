@@ -320,22 +320,37 @@
 
         window.globalCtData = [];
         window.globalDhData = {};
+        window.allOrdersData = []; // Lưu trữ dữ liệu khi in hàng loạt
 
         async function fetchAndRenderData() {
             const urlParams = new URLSearchParams(window.location.search);
-            const ma_kho = urlParams.get('ma_kho');
+            const ma_kho_param = urlParams.get('ma_kho');
+            const mode = urlParams.get('mode');
 
-            if (!ma_kho) {
+            if (mode === 'custom_shipping') {
+                window.handleCustomShippingPrint();
+                return;
+            }
+
+            if (!ma_kho_param) {
                 document.getElementById('loading-state').classList.add('hidden');
                 document.getElementById('error-state').classList.remove('hidden');
                 return;
             }
 
-            try {
-                const { data: dhData, error: dhError } = await sb.from('don_hang').select('*').eq('ma_kho', ma_kho).single();
-                if (dhError || !dhData) throw new Error(dhError?.message || 'Không tìm thấy đơn hàng.');
+            const maKhoList = ma_kho_param.split(',').map(s => s.trim()).filter(Boolean);
 
-                const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').eq('ma_kho', ma_kho).order('stt', { ascending: true });
+            try {
+                const { data: dhsData, error: dhError } = await sb.from('don_hang').select('*').in('ma_kho', maKhoList);
+                if (dhError || !dhsData || dhsData.length === 0) throw new Error(dhError?.message || 'Không tìm thấy đơn hàng.');
+
+                // Sắp xếp lại theo đúng thứ tự maKhoList
+                window.allOrdersData = maKhoList.map(mk => dhsData.find(d => d.ma_kho === mk)).filter(Boolean);
+                
+                // Mặc định hiển thị đơn hàng đầu tiên cho view A4
+                window.globalDhData = window.allOrdersData[0];
+
+                const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').in('ma_kho', maKhoList).order('stt', { ascending: true });
                 if (ctError) throw new Error(ctError.message);
 
                 const maVachList = ctData.map(item => item.ma_vach).filter(Boolean);
@@ -351,9 +366,13 @@
                     ...item,
                     tray: tonKhoMap.get(item.ma_vach)?.tray || 'N/A'
                 }));
-                window.globalDhData = dhData;
 
                 renderA4();
+
+                // Nếu có mode=shipping, tự động kích hoạt in nhãn cho tất cả
+                if (mode === 'shipping') {
+                    window.handlePrintShippingLabel();
+                }
 
             } catch (error) {
                 console.error(error);
@@ -479,55 +498,169 @@
             `;
         }
 
+        window.handleCustomShippingPrint = function() {
+            const rawText = sessionStorage.getItem('custom_shipping_info_text');
+            if (!rawText) return;
+
+            const labelArea = document.getElementById('label-area');
+            const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
+            labelArea.innerHTML = '';
+            let allLabelsHTML = '';
+
+            // Tách các khối theo dấu gạch ngang (7 dấu hoặc nhiều hơn)
+            const blocks = rawText.split(/-{7,}/).map(b => b.trim()).filter(b => b.length > 0);
+
+            blocks.forEach(block => {
+                // Parse Mã NX, Ngành, Yêu Cầu từ dòng đầu tiên: (1) DO-2026-EES | WHB4 - ESC - Tran Canh Phuc
+                const headerMatch = block.match(/\(\d+\)\s*([^|]+)\s*\|\s*WHB4\s*-\s*([^-]+)\s*-\s*([^\n]+)/);
+                let ma_nx = headerMatch ? headerMatch[1].trim() : 'CUSTOM';
+                let nganh = headerMatch ? headerMatch[2].trim() : 'N/A';
+                let yeu_cau = headerMatch ? headerMatch[3].trim() : 'N/A';
+                let yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
+
+                // Parse Nội dung :
+                const contentMatch = block.match(/Nội dung\s*:\s*([^\n]+)/i);
+                let muc_dich = contentMatch ? contentMatch[1].trim() : '';
+
+                // Parse Gửi :
+                const guiMatch = block.match(/Gửi\s*:\s*([^\n]+)/i);
+                let diaChi = guiMatch ? guiMatch[1].trim() : '...................................';
+                
+                // Loại bỏ dòng "Số Lượng" nếu nó lọt vào diaChi
+                diaChi = diaChi.replace(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i, '').trim();
+
+                // Parse Số Lượng : 
+                const slMatch = block.match(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i);
+                let totalKien = 1;
+                if (slMatch) {
+                    const matchedNum = parseInt(slMatch[1].trim(), 10);
+                    if (!isNaN(matchedNum)) totalKien = matchedNum;
+                }
+
+                const ma_nx_len = ma_nx.length || 1;
+                const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
+
+                for (let i = 1; i <= totalKien; i++) {
+                    allLabelsHTML += `
+                        <div class="shipping-label">
+                            <div class="sl-header">
+                                <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
+                            </div>
+                            <div class="border-t border-dashed border-black w-full"></div>
+                            <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
+                                 <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
+                                 <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${ma_nx}</div>
+                            </div>
+                            <div class="sl-section">
+                                <div class="flex items-baseline gap-2">
+                                    <div class="sl-title whitespace-nowrap text-black">TỪ / FROM:</div>
+                                    <div class="text-xl font-black text-black">WH-B4</div>
+                                </div>
+                                <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
+                            </div>
+                            <div class="sl-section">
+                                <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${diaChi}</div>
+                            </div>
+                            <div class="sl-section flex-grow">
+                                <div class="sl-title text-black">NỘI DUNG / CONTENT:</div><div class="sl-content font-normal text-[11px] text-justify text-black">${muc_dich}</div>
+                            </div>
+                            <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
+                                <div class="text-sm font-bold text-black">Kiện: ${i}/${totalKien}</div>
+                                <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            labelArea.innerHTML = allLabelsHTML;
+
+            setTimeout(() => {
+                document.body.classList.add('printing-labels');
+                setTimeout(() => {
+                    window.print();
+                    document.body.classList.remove('printing-labels');
+                }, 500);
+            }, 100);
+        }
+
         window.handlePrintShippingLabel = function () {
             const labelArea = document.getElementById('label-area');
-            const dhData = window.globalDhData;
             const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
-
-            const nganh = (dhData.nganh || '').trim();
-            const yeu_cau = (dhData.yeu_cau || '').trim();
-            const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
-            const ghi_chu = (dhData.ghi_chu || '').trim() || '...................................';
-            const muc_dich = (dhData.muc_dich || '').trim();
-            const ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
-
-            const ma_nx_len = ma_nx.length || 1;
-            const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
-
+            
             labelArea.innerHTML = '';
+            let allLabelsHTML = '';
 
-            const shippingLabelHTML = `
-                <div class="shipping-label">
-                    <div class="sl-header">
-                        <!-- ĐÃ SỬA: Bỏ mix-blend-multiply để không bị nền xám -->
-                        <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
-                    </div>
-                    <div class="border-t border-dashed border-black w-full"></div>
-                    <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
-                         <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
-                         <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${ma_nx}</div>
-                    </div>
-                    <div class="sl-section">
-                        <div class="flex items-baseline gap-2">
-                            <div class="sl-title whitespace-nowrap text-black">TỪ / FROM:</div>
-                            <div class="text-xl font-black text-black">WH-B4</div>
-                        </div>
-                        <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
-                    </div>
-                    <div class="sl-section">
-                        <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${ghi_chu}</div>
-                    </div>
-                    <div class="sl-section flex-grow">
-                        <div class="sl-title text-black">NỘI DUNG / CONTENT:</div><div class="sl-content font-normal text-[11px] text-justify text-black">${muc_dich}</div>
-                    </div>
-                    <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
-                        <div class="text-sm font-bold text-black">Kiện: ...../.....</div>
-                        <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
-                    </div>
-                </div>
-            `;
+            // Lặp qua tất cả các đơn hàng đã tải (hỗ trợ in hàng loạt)
+            const ordersToPrint = window.allOrdersData.length > 0 ? window.allOrdersData : [window.globalDhData];
 
-            labelArea.innerHTML = shippingLabelHTML;
+            ordersToPrint.forEach(dhData => {
+                const nganh = (dhData.nganh || '').trim();
+                const yeu_cau = (dhData.yeu_cau || '').trim();
+                const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
+                const rawGhiChu = (dhData.ghi_chu || '').trim();
+                const muc_dich = (dhData.muc_dich || '').trim();
+                const ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
+
+                const ma_nx_len = ma_nx.length || 1;
+                const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
+                
+                // Phân tách ghi chú theo đường kẻ
+                const addressParts = rawGhiChu.split(/_{5,}/).map(p => p.trim()).filter(p => p.length > 0);
+                if (addressParts.length === 0 && rawGhiChu) addressParts.push(rawGhiChu);
+                if (addressParts.length === 0) addressParts.push('...................................');
+
+                addressParts.forEach(part => {
+                    const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
+                    const slMatch = part.match(slRegex);
+                    
+                    let totalKien = 1;
+                    let diaChi = part;
+
+                    if (slMatch) {
+                        const matchedNum = parseInt(slMatch[1].trim(), 10);
+                        if (!isNaN(matchedNum)) totalKien = matchedNum;
+                        diaChi = part.replace(slMatch[0], '').trim();
+                        // Dọn dẹp các ký tự ngăn cách thừa
+                        diaChi = diaChi.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
+                    }
+                    if (!diaChi) diaChi = '...................................';
+
+                    for (let i = 1; i <= totalKien; i++) {
+                        allLabelsHTML += `
+                            <div class="shipping-label">
+                                <div class="sl-header">
+                                    <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
+                                </div>
+                                <div class="border-t border-dashed border-black w-full"></div>
+                                <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
+                                     <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
+                                     <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${ma_nx}</div>
+                                </div>
+                                <div class="sl-section">
+                                    <div class="flex items-baseline gap-2">
+                                        <div class="sl-title whitespace-nowrap text-black">TỪ / FROM:</div>
+                                        <div class="text-xl font-black text-black">WH-B4</div>
+                                    </div>
+                                    <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
+                                </div>
+                                <div class="sl-section">
+                                    <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${diaChi}</div>
+                                </div>
+                                <div class="sl-section flex-grow">
+                                    <div class="sl-title text-black">NỘI DUNG / CONTENT:</div><div class="sl-content font-normal text-[11px] text-justify text-black">${muc_dich}</div>
+                                </div>
+                                <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
+                                    <div class="text-sm font-bold text-black">Kiện: ${i}/${totalKien}</div>
+                                    <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            });
+
+            labelArea.innerHTML = allLabelsHTML;
 
             setTimeout(() => {
                 document.body.classList.add('printing-labels');

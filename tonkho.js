@@ -252,7 +252,14 @@ function renderTonKhoTable(data) {
                 <tr data-id="${tk.ma_vach}" class="hover:bg-gray-50 ${isSelected ? 'bg-blue-100' : ''}">
                     <td class="px-1 py-2 border border-gray-300 text-center"><input type="checkbox" class="ton-kho-select-row" data-id="${tk.ma_vach}" ${isSelected ? 'checked' : ''}></td>
                     <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left cursor-pointer text-blue-600 hover:underline ma-vach-cell">${tk.ma_vach}</td>
-                    <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">${tk.ma_vt}</td>
+                    <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">
+                        <div class="flex items-center justify-between group">
+                            <span>${tk.ma_vt}</span>
+                            <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" data-ma-vt="${tk.ma_vt}" title="Copy mã">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-3 8h6m-6 4h6m-6-8h6"></path></svg>
+                            </button>
+                        </div>
+                    </td>
                     <td class="px-1 py-2 text-sm text-gray-600 break-words border border-gray-300 text-left">${tk.ten_vt}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.lot || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.date || ''}</td>
@@ -489,15 +496,20 @@ export function initTonKhoView() {
     
     applyTonKhoColumnState();
 
-    document.getElementById('ton-kho-search').addEventListener('input', debounce(() => {
-        viewStates['view-ton-kho'].searchTerm = document.getElementById('ton-kho-search').value;
-        fetchTonKho(1);
-    }, 500));
+    const searchInput = document.getElementById('ton-kho-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => {
+            viewStates['view-ton-kho'].searchTerm = searchInput.value;
+            fetchTonKho(1);
+        }, 500));
+    }
     
-    viewContainer.addEventListener('click', e => {
-        const btn = e.target.closest('.filter-btn');
-        if (btn) openTonKhoFilterPopover(btn, 'view-ton-kho');
-    });
+    if (viewContainer) {
+        viewContainer.addEventListener('click', e => {
+            const btn = e.target.closest('.filter-btn');
+            if (btn) openTonKhoFilterPopover(btn, 'view-ton-kho');
+        });
+    }
 
     const toggleAvailableBtn = document.getElementById('ton-kho-toggle-available');
     const toggleAllBtn = document.getElementById('ton-kho-toggle-all');
@@ -513,26 +525,42 @@ export function initTonKhoView() {
         }
     };
     
-    toggleAvailableBtn.addEventListener('click', handleToggleClick);
-    toggleAllBtn.addEventListener('click', handleToggleClick);
+    if (toggleAvailableBtn) toggleAvailableBtn.addEventListener('click', handleToggleClick);
+    if (toggleAllBtn) toggleAllBtn.addEventListener('click', handleToggleClick);
     
     state.stockAvailability = sessionStorage.getItem('tonKhoStockAvailability') || 'available';
     updateTonKhoToggleUI();
 
-    document.getElementById('ton-kho-reset-filters').addEventListener('click', () => {
-        document.getElementById('ton-kho-search').value = '';
-        viewStates['view-ton-kho'].searchTerm = '';
-        viewStates['view-ton-kho'].filters = { ma_vt: [], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
-        document.querySelectorAll('#view-ton-kho .filter-btn').forEach(btn => {
-            btn.textContent = filterButtonDefaultTexts[btn.id];
+    const resetFiltersBtn = document.getElementById('ton-kho-reset-filters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            const searchInput = document.getElementById('ton-kho-search');
+            if (searchInput) searchInput.value = '';
+            viewStates['view-ton-kho'].searchTerm = '';
+            viewStates['view-ton-kho'].filters = { ma_vt: [], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
+            document.querySelectorAll('#view-ton-kho .filter-btn').forEach(btn => {
+                btn.textContent = filterButtonDefaultTexts[btn.id];
+            });
+            state.stockAvailability = 'available';
+            sessionStorage.setItem('tonKhoStockAvailability', 'available');
+            updateTonKhoToggleUI();
+            fetchTonKho(1);
         });
-        state.stockAvailability = 'available';
-        sessionStorage.setItem('tonKhoStockAvailability', 'available');
-        updateTonKhoToggleUI();
-        fetchTonKho(1);
-    });
+    }
 
-    document.getElementById('ton-kho-table-body').addEventListener('click', async e => {
+    const tableBody = document.getElementById('ton-kho-table-body');
+    if (tableBody) {
+        tableBody.addEventListener('click', async e => {
+        const copyBtn = e.target.closest('.ton-kho-copy-ma-vt-btn');
+        if (copyBtn) {
+            e.stopPropagation();
+            const maVt = copyBtn.dataset.maVt;
+            navigator.clipboard.writeText(maVt).then(() => {
+                showToast(`Đã copy mã: ${maVt}`, 'success');
+            });
+            return;
+        }
+
         const row = e.target.closest('tr');
         if (!row || !row.dataset.id) return;
         const id = row.dataset.id;
@@ -553,8 +581,11 @@ export function initTonKhoView() {
         updateTonKhoActionButtonsState();
         updateTonKhoSelectionInfo();
     });
+    }
 
-    document.getElementById('ton-kho-select-all').addEventListener('click', (e) => {
+    const selectAllCb = document.getElementById('ton-kho-select-all');
+    if (selectAllCb) {
+        selectAllCb.addEventListener('click', (e) => {
         const isChecked = e.target.checked;
         document.querySelectorAll('.ton-kho-select-row').forEach(cb => {
             if(cb.checked !== isChecked) {
@@ -568,106 +599,141 @@ export function initTonKhoView() {
         updateTonKhoActionButtonsState();
         updateTonKhoSelectionInfo();
     });
+    }
     
-    document.getElementById('ton-kho-btn-add').addEventListener('click', () => openTonKhoModal(null, 'add'));
-    document.getElementById('ton-kho-btn-edit').addEventListener('click', async () => {
-        const ma_vach = [...viewStates['view-ton-kho'].selected][0];
-        const { data } = await sb.from('ton_kho').select('*').eq('ma_vach', ma_vach).single();
-        if(data) openTonKhoModal(data, 'edit');
-    });
-    document.getElementById('ton-kho-btn-delete').addEventListener('click', handleDeleteMultipleTonKho);
-    document.getElementById('ton-kho-btn-excel').addEventListener('click', handleTonKhoExcelExport);
-    document.getElementById('ton-kho-form').addEventListener('submit', handleSaveTonKho);
+    const btnAdd = document.getElementById('ton-kho-btn-add');
+    if (btnAdd) btnAdd.addEventListener('click', () => openTonKhoModal(null, 'add'));
+    
+    const btnEdit = document.getElementById('ton-kho-btn-edit');
+    if (btnEdit) {
+        btnEdit.addEventListener('click', async () => {
+            const ma_vach = [...viewStates['view-ton-kho'].selected][0];
+            const { data } = await sb.from('ton_kho').select('*').eq('ma_vach', ma_vach).single();
+            if(data) openTonKhoModal(data, 'edit');
+        });
+    }
+
+    const btnDelete = document.getElementById('ton-kho-btn-delete');
+    if (btnDelete) btnDelete.addEventListener('click', handleDeleteMultipleTonKho);
+
+    const btnExcel = document.getElementById('ton-kho-btn-excel');
+    if (btnExcel) btnExcel.addEventListener('click', handleTonKhoExcelExport);
+
+    const formTonKho = document.getElementById('ton-kho-form');
+    if (formTonKho) formTonKho.addEventListener('submit', handleSaveTonKho);
     
     const closeModal = () => {
-        document.getElementById('ton-kho-modal').classList.add('hidden');
-        // This was closing the lot popover, but since it's not managed here, we remove it.
-        // closeActiveAutocompletePopover(); 
+        const modal = document.getElementById('ton-kho-modal');
+        if(modal) modal.classList.add('hidden');
     };
-    document.getElementById('cancel-ton-kho-btn').addEventListener('click', closeModal);
-    document.getElementById('close-ton-kho-view-btn').addEventListener('click', closeModal);
+    
+    const cancelBtn = document.getElementById('cancel-ton-kho-btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    
+    const closeViewBtn = document.getElementById('close-ton-kho-view-btn');
+    if (closeViewBtn) closeViewBtn.addEventListener('click', closeModal);
     
     const tkModalMaVt = document.getElementById('ton-kho-modal-ma-vt');
-    
-    const handleMaVtInput = async () => {
-        if (cache.sanPhamList.length === 0) await fetchSanPham(1, false);
-        const inputValue = tkModalMaVt.value.toLowerCase().trim();
-        const suggestions = inputValue 
-            ? cache.sanPhamList.filter(p => 
-                p.ma_vt.toLowerCase().includes(inputValue) || 
-                p.ten_vt.toLowerCase().includes(inputValue)
-              ).slice(0, 10)
-            : cache.sanPhamList.slice(0, 10);
+    if (tkModalMaVt) {
+        const handleMaVtInput = async () => {
+            if (cache.sanPhamList.length === 0) await fetchSanPham(1, false);
+            const inputValue = tkModalMaVt.value.toLowerCase().trim();
+            const suggestions = inputValue 
+                ? cache.sanPhamList.filter(p => 
+                    p.ma_vt.toLowerCase().includes(inputValue) || 
+                    p.ten_vt.toLowerCase().includes(inputValue)
+                  ).slice(0, 10)
+                : cache.sanPhamList.slice(0, 10);
+                
+            openAutocomplete(tkModalMaVt, suggestions, {
+                valueKey: 'ma_vt',
+                primaryTextKey: 'ma_vt',
+                secondaryTextKey: 'ten_vt',
+                onSelect: (selectedValue) => {
+                    tkModalMaVt.value = selectedValue;
+                    tkModalMaVt.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        };
+        
+        tkModalMaVt.addEventListener('focus', handleMaVtInput);
+        tkModalMaVt.addEventListener('input', debounce(handleMaVtInput, 200)); 
+        
+        tkModalMaVt.addEventListener('change', () => { 
+            const selectedMaVt = tkModalMaVt.value;
+            const sanPham = cache.sanPhamList.find(p => p.ma_vt === selectedMaVt);
+            const tenVtInput = document.getElementById('ton-kho-modal-ten-vt');
+            const nganhInput = document.getElementById('ton-kho-modal-nganh');
+            const phuTrachInput = document.getElementById('ton-kho-modal-phu-trach');
             
-        openAutocomplete(tkModalMaVt, suggestions, {
-            valueKey: 'ma_vt',
-            primaryTextKey: 'ma_vt',
-            secondaryTextKey: 'ten_vt',
-            onSelect: (selectedValue) => {
-                tkModalMaVt.value = selectedValue;
-                tkModalMaVt.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
-    };
-    
-    tkModalMaVt.addEventListener('focus', handleMaVtInput);
-    tkModalMaVt.addEventListener('input', debounce(handleMaVtInput, 200)); 
-    
-    tkModalMaVt.addEventListener('change', () => { 
-        // closeActiveAutocompletePopover(); 
-        const selectedMaVt = tkModalMaVt.value;
-        const sanPham = cache.sanPhamList.find(p => p.ma_vt === selectedMaVt);
-        document.getElementById('ton-kho-modal-ten-vt').value = sanPham?.ten_vt || '';
-        document.getElementById('ton-kho-modal-nganh').value = sanPham?.nganh || '';
-        document.getElementById('ton-kho-modal-phu-trach').value = sanPham?.phu_trach || '';
-        updateGeneratedMaVach();
-    });
-
-    document.getElementById('ton-kho-modal-lot').addEventListener('input', updateGeneratedMaVach);
-    const dateInput = document.getElementById('ton-kho-modal-date');
-    dateInput.addEventListener('input', updateGeneratedMaVach);
-    dateInput.addEventListener('change', (e) => {
-        const input = e.target;
-        const dateValue = parseDate(input.value);
-        if (input.value && !dateValue) {
-            showToast('Ngày không hợp lệ. Vui lòng nhập đúng dd/mm/yyyy.', 'error');
-            input.classList.add('border-red-500');
-            input.value = '';
+            if(tenVtInput) tenVtInput.value = sanPham?.ten_vt || '';
+            if(nganhInput) nganhInput.value = sanPham?.nganh || '';
+            if(phuTrachInput) phuTrachInput.value = sanPham?.phu_trach || '';
             updateGeneratedMaVach();
-        } else {
-            input.classList.remove('border-red-500');
-        }
-        updateTinhTrangField();
-    });
+        });
+    }
 
-    document.getElementById('ton-kho-items-per-page').addEventListener('change', (e) => {
-        viewStates['view-ton-kho'].itemsPerPage = parseInt(e.target.value, 10);
-        fetchTonKho(1);
-    });
-    document.getElementById('ton-kho-prev-page').addEventListener('click', () => fetchTonKho(viewStates['view-ton-kho'].currentPage - 1));
-    document.getElementById('ton-kho-next-page').addEventListener('click', () => fetchTonKho(viewStates['view-ton-kho'].currentPage + 1));
+    const lotInput = document.getElementById('ton-kho-modal-lot');
+    if (lotInput) lotInput.addEventListener('input', updateGeneratedMaVach);
+
+    const dateInput = document.getElementById('ton-kho-modal-date');
+    if (dateInput) {
+        dateInput.addEventListener('input', updateGeneratedMaVach);
+        dateInput.addEventListener('change', (e) => {
+            const input = e.target;
+            const dateValue = parseDate(input.value);
+            if (input.value && !dateValue) {
+                showToast('Ngày không hợp lệ. Vui lòng nhập đúng dd/mm/yyyy.', 'error');
+                input.classList.add('border-red-500');
+                input.value = '';
+                updateGeneratedMaVach();
+            } else {
+                input.classList.remove('border-red-500');
+            }
+            updateTinhTrangField();
+        });
+    }
+
+    const itemsPerPageSelect = document.getElementById('ton-kho-items-per-page');
+    if (itemsPerPageSelect) {
+        itemsPerPageSelect.addEventListener('change', (e) => {
+            viewStates['view-ton-kho'].itemsPerPage = parseInt(e.target.value, 10);
+            fetchTonKho(1);
+        });
+    }
+
+    const prevPageBtn = document.getElementById('ton-kho-prev-page');
+    if (prevPageBtn) prevPageBtn.addEventListener('click', () => fetchTonKho(viewStates['view-ton-kho'].currentPage - 1));
+
+    const nextPageBtn = document.getElementById('ton-kho-next-page');
+    if (nextPageBtn) nextPageBtn.addEventListener('click', () => fetchTonKho(viewStates['view-ton-kho'].currentPage + 1));
     
     const pageInput = document.getElementById('ton-kho-page-input');
-    const handlePageJump = () => {
-        const state = viewStates['view-ton-kho'];
-        let targetPage = parseInt(pageInput.value, 10);
-        const totalPages = Math.ceil(state.totalFilteredCount / state.itemsPerPage);
+    if (pageInput) {
+        const handlePageJump = () => {
+            const state = viewStates['view-ton-kho'];
+            let targetPage = parseInt(pageInput.value, 10);
+            const totalPages = Math.ceil(state.totalFilteredCount / state.itemsPerPage);
 
-        if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
-        else if (targetPage > totalPages && totalPages > 0) targetPage = totalPages;
-        else if (totalPages === 0) targetPage = 1;
-        
-        pageInput.value = targetPage;
-        if (targetPage !== state.currentPage) fetchTonKho(targetPage);
-    };
-    pageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }
-    });
-    pageInput.addEventListener('change', handlePageJump);
+            if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
+            else if (targetPage > totalPages && totalPages > 0) targetPage = totalPages;
+            else if (totalPages === 0) targetPage = 1;
+            
+            pageInput.value = targetPage;
+            if (targetPage !== state.currentPage) fetchTonKho(targetPage);
+        };
+        pageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }
+        });
+        pageInput.addEventListener('change', handlePageJump);
+    }
     
-    document.getElementById('ton-kho-toggle-cols').addEventListener('click', () => {
-        const isCurrentlyCollapsed = sessionStorage.getItem('tonKhoColsCollapsed') !== 'false';
-        sessionStorage.setItem('tonKhoColsCollapsed', !isCurrentlyCollapsed);
-        applyTonKhoColumnState();
-    });
+    const toggleColsBtn = document.getElementById('ton-kho-toggle-cols');
+    if (toggleColsBtn) {
+        toggleColsBtn.addEventListener('click', () => {
+            const isCurrentlyCollapsed = sessionStorage.getItem('tonKhoColsCollapsed') !== 'false';
+            sessionStorage.setItem('tonKhoColsCollapsed', !isCurrentlyCollapsed);
+            applyTonKhoColumnState();
+        });
+    }
 }

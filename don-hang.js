@@ -933,9 +933,13 @@ function updateDonHangActionButtonsState() {
     const editBtn = document.getElementById('don-hang-btn-edit');
     const deleteBtn = document.getElementById('don-hang-btn-delete');
     const printBtn = document.getElementById('don-hang-btn-print');
+    const msgBtn = document.getElementById('don-hang-btn-msg');
+    const shipBtn = document.getElementById('don-hang-btn-shipping');
     
     if (editBtn) editBtn.disabled = selectedCount !== 1;
     if (deleteBtn) deleteBtn.disabled = selectedCount === 0;
+    if (msgBtn) msgBtn.disabled = selectedCount === 0;
+    if (shipBtn) shipBtn.disabled = selectedCount === 0;
     
     const isPrintDisabled = selectedCount !== 1;
     if (printBtn) printBtn.disabled = isPrintDisabled;
@@ -946,6 +950,68 @@ function updateDonHangActionButtonsState() {
         const isDisabledForView = !selectedOrder || selectedOrder.yeu_cau !== currentUser.ho_ten;
         if (printBtn) printBtn.disabled = isDisabledForView;
     }
+}
+
+async function handleExportMessage() {
+    const state = viewStates['view-don-hang'];
+    const selectedIds = Array.from(state.selected);
+    if (selectedIds.length === 0) return;
+
+    // Lấy dữ liệu đầy đủ của các đơn hàng đã chọn từ cache
+    const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
+    
+    // Sắp xếp theo mã kho hoặc thời gian nếu cần (ở đây giữ nguyên thứ tự chọn/cache)
+    let messageText = '';
+    let counter = 1;
+
+    selectedOrders.forEach(order => {
+        const nganh = order.nganh || '';
+        const yeu_cau = order.yeu_cau || '';
+        const ghi_chu = order.ghi_chu || '';
+        const ma_nx = order.ma_nx || order.ma_kho || '';
+        const muc_dich = order.muc_dich || '';
+
+        // Tách ghi chú theo đường kẻ phân cách (ít nhất 5 dấu gạch dưới)
+        const parts = ghi_chu.split(/_{5,}/).map(p => p.trim()).filter(p => p.length > 0);
+        
+        if (parts.length === 0 && ghi_chu.trim().length > 0) {
+            parts.push(ghi_chu.trim());
+        }
+
+        parts.forEach(part => {
+            // Header: (1) Mã NX | WHB4 - Ngành - Yêu Cầu
+            messageText += `(${counter}) ${ma_nx} | WHB4 - ${nganh} - ${yeu_cau}\n`;
+            
+            // Tìm số lượng kiện: "Số Lượng : [X] Kiện"
+            const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
+            const slMatch = part.match(slRegex);
+            
+            let slText = '... Kiện';
+            let guiText = part;
+
+            if (slMatch) {
+                slText = slMatch[1].trim() + ' Kiện';
+                guiText = part.replace(slMatch[0], '').trim();
+                guiText = guiText.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
+            }
+
+            messageText += `Nội dung : ${muc_dich}\n`;
+            messageText += `Gửi : ${guiText}\n`;
+            messageText += `Số Lượng : ${slText}\n`;
+            messageText += `-------\n\n`;
+            counter++;
+        });
+    });
+
+    if (!messageText) {
+        showToast('Không có nội dung ghi chú nào để xuất.', 'info');
+        return;
+    }
+
+    const modal = document.getElementById('msg-export-modal');
+    const contentArea = document.getElementById('msg-export-content');
+    contentArea.value = messageText.trim();
+    modal.classList.remove('hidden');
 }
 
 
@@ -1478,6 +1544,16 @@ async function handleSaveDonHang(e, printAction = null) {
             muc_dich: getElValue('don-hang-modal-muc-dich', true),
             ghi_chu: getElValue('don-hang-modal-ghi-chu', true),
         };
+
+        // Kiểm tra số lượng kiện trống trong ghi chú nếu Mã NX đã hoàn tất (không có dấu gạch ngang cuối)
+        if (donHangData.ma_nx && !donHangData.ma_nx.endsWith('-')) {
+            if (donHangData.ghi_chu.includes("... Kiện") || donHangData.ghi_chu.includes("...Kiện")) {
+                showToast('Mã NX đã xử lý xong, vui lòng điền số lượng kiện vào phần Ghi Chú.', 'error');
+                const ghiChuEl = document.getElementById('don-hang-modal-ghi-chu');
+                ghiChuEl.focus();
+                return;
+            }
+        }
         
         for (const key in donHangData) {
             if (typeof donHangData[key] === 'string' && donHangData[key].startsWith('__MISSING_ELEMENT_')) {
@@ -1852,6 +1928,93 @@ export function initDonHangView() {
             }
         }
     });
+
+    // Chức năng cho cột Ghi Chú: Tự động điền 'Số Lượng :  ... Kiện' và chèn ngăn cách Shift + Enter
+    const ghiChuInput = document.getElementById('don-hang-modal-ghi-chu');
+    if (ghiChuInput) {
+        ghiChuInput.addEventListener('focus', function() {
+            if (!this.value.trim()) {
+                this.value = 'Số Lượng :  ... Kiện';
+                // Đưa cursor về trước dấu ...
+                const pos = 13; // "Số Lượng :  ".length
+                setTimeout(() => {
+                    this.setSelectionRange(pos, pos + 3);
+                }, 0);
+            }
+        });
+
+        ghiChuInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                const text = this.value;
+                const before = text.substring(0, start);
+                const after = text.substring(end);
+                const separator = '\n_____________\nSố Lượng :  ... Kiện';
+                this.value = before + separator + after;
+                
+                // Di chuyển cursor đến vị trí mới
+                const newPos = start + separator.length - 8; // Vị trí dấu ...
+                this.setSelectionRange(newPos, newPos + 3);
+            }
+        });
+    }
+
+    // Logic cho Modal Xuất Tin Nhắn
+    const msgBtn = document.getElementById('don-hang-btn-msg');
+    if (msgBtn) {
+        msgBtn.addEventListener('click', handleExportMessage);
+    }
+
+    const shipBtn = document.getElementById('don-hang-btn-shipping');
+    if (shipBtn) {
+        shipBtn.addEventListener('click', () => {
+            const selectedIds = [...viewStates['view-don-hang'].selected];
+            if (selectedIds.length > 0) {
+                const ma_kho_list = selectedIds.join(',');
+                openPrintPreviewModal(`print-pkl.html?ma_kho=${ma_kho_list}&mode=shipping`, `In Nhãn Vận Chuyển`);
+            }
+        });
+    }
+
+    const closeMsgBtn = document.getElementById('close-msg-modal-btn');
+    const cancelMsgBtn = document.getElementById('cancel-msg-modal-btn');
+    const msgModal = document.getElementById('msg-export-modal');
+    [closeMsgBtn, cancelMsgBtn].forEach(btn => {
+        if (btn) btn.addEventListener('click', () => msgModal.classList.add('hidden'));
+    });
+
+    const copyMsgBtn = document.getElementById('copy-msg-btn');
+    if (copyMsgBtn) {
+        copyMsgBtn.addEventListener('click', () => {
+            const contentArea = document.getElementById('msg-export-content');
+            if (!contentArea.value) return;
+            
+            contentArea.select();
+            navigator.clipboard.writeText(contentArea.value).then(() => {
+                showToast('Đã copy tin nhắn vào clipboard!', 'success');
+            }).catch(err => {
+                showToast('Lỗi khi copy: ' + err, 'error');
+            });
+        });
+    }
+
+    const modalPrintBtn = document.getElementById('don-hang-modal-print-btn');
+    if (modalPrintBtn) {
+        modalPrintBtn.addEventListener('click', () => {
+            const contentArea = document.getElementById('msg-export-content');
+            if (!contentArea.value) return;
+
+            sessionStorage.setItem('custom_shipping_info_text', contentArea.value);
+            
+            // Nạp URL vào iframe ẩn để hiện hộp thoại in mà không cần mở tab mới
+            const printIframe = document.getElementById('print-iframe');
+            if (printIframe) {
+                printIframe.src = `print-pkl.html?mode=custom_shipping&t=${Date.now()}`;
+            }
+        });
+    }
 
     document.getElementById('don-hang-modal-loai-don').addEventListener('change', () => {
         updateGeneratedCodes();

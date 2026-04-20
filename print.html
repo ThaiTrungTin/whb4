@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phiếu In Đơn Hàng</title>
-    <link rel="icon" type="image/png"
-        href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
+    <link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/50/1/johnson-johnson-logo-png_seeklogo-500414.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -19,28 +17,22 @@
             body * {
                 visibility: hidden;
             }
-
-            #printable-area,
-            #printable-area * {
+            #printable-area, #printable-area * {
                 visibility: visible;
             }
-
             #printable-area {
                 position: absolute;
                 left: 0;
                 top: 0;
                 width: 100%;
             }
-
             .no-print {
                 display: none;
             }
         }
-
         body {
             background-color: #f0f2f5;
         }
-
         #printable-area {
             width: 210mm;
             min-height: 297mm;
@@ -50,42 +42,33 @@
             background: white;
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
         }
-
         #chi-tiet-table-body tr {
-            height: 1.08cm;
-            /* Fixed height for all rows (reduced 10%) */
-            page-break-inside: avoid;
-            /* Prevent rows from splitting across pages */
+            height: 1.08cm; /* Fixed height for all rows (reduced 10%) */
+            page-break-inside: avoid; /* Prevent rows from splitting across pages */
         }
-
         #chi-tiet-table-body td {
-            vertical-align: middle;
-            /* Vertically center content in taller cells */
+            vertical-align: middle; /* Vertically center content in taller cells */
         }
     </style>
 </head>
-
 <body class="font-sans text-xs">
 
     <div id="toolbar" class="no-print bg-white p-4 shadow-md sticky top-0 z-50 flex items-center justify-center gap-3">
-        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">In
-            Phiếu</button>
-        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Xuất
-            PDF</button>
-        <button id="excel-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Xuất
-            Excel</button>
+        <button id="print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">In Phiếu</button>
+        <button id="pdf-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Xuất PDF</button>
+        <button id="excel-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Xuất Excel</button>
         <div class="border-l pl-3 ml-3">
-            <label class="flex items-center space-x-2 cursor-pointer">
+             <label class="flex items-center space-x-2 cursor-pointer">
                 <input type="checkbox" id="signature-toggle" class="form-checkbox h-5 w-5 text-blue-600 rounded">
                 <span class="text-gray-700 font-medium">Hiện chữ ký</span>
             </label>
         </div>
     </div>
-
+    
     <div id="loading-state" class="text-center p-10">
         <p class="text-gray-600">Đang tải dữ liệu đơn hàng...</p>
     </div>
-
+    
     <div id="error-state" class="hidden text-center p-10 bg-red-100 text-red-700 w-1/2 mx-auto mt-10 rounded-lg">
         <p class="font-bold">Không thể tải đơn hàng</p>
         <p id="error-message">Mã đơn hàng không hợp lệ hoặc không tồn tại.</p>
@@ -93,9 +76,8 @@
 
     <div id="printable-area" class="hidden relative">
         <!-- Logo mới -->
-        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg"
-            alt="Logo" class="absolute top-6 left-12 w-24"> <!-- Thay đổi từ left-12 -->
-
+        <img src="https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg" alt="Logo" class="absolute top-6 left-10 w-24"> <!-- Thay đổi từ left-12 -->
+        
         <div id="qrcode" class="absolute top-6 right-6 w-16 h-16 flex-shrink-0"></div> <!-- Thay đổi từ w-12 h-12 -->
 
         <div class="text-center mb-6">
@@ -108,17 +90,16 @@
         </div>
 
         <div class="mb-4"> <!-- Thay đổi từ mb-8 -->
-            <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1 text-[10px]">
+             <div class="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1 text-[10px]">
                 <div id="receiver-label" class="italic text-left whitespace-nowrap"></div>
                 <div id="info-yeu-cau"></div>
-
+                
                 <div class="italic text-left whitespace-nowrap">Bộ Phận / Department :</div>
                 <div id="info-nganh"></div>
 
-                <div class="italic text-left whitespace-nowrap align-top">Lý do / Reason (Địa điểm/thời gian/tên Hội
-                    nghị) :</div>
+                <div class="italic text-left whitespace-nowrap align-top">Lý do / Reason (Địa điểm/thời gian/tên Hội nghị) :</div>
                 <div id="info-muc-dich" class="font-bold"></div>
-            </div>
+             </div>
         </div>
 
         <table class="w-full border-collapse text-[8px]">
@@ -127,13 +108,11 @@
                     <th rowspan="2" class="border border-black p-1 text-center bg-gray-100">
                         <span class="font-semibold">No</span> <!-- Đổi sang font-semibold -->
                     </th>
-                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 37.5%;"
-                        id="th-ten-hang">
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 37.5%;" id="th-ten-hang">
                         <span class="font-semibold">Tên Hàng</span><br> <!-- Đổi sang font-semibold -->
                         <em class="font-normal">(Item)</em>
                     </th>
-                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12%;"
-                        id="th-ma-hang">
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12%;" id="th-ma-hang">
                         <span class="font-semibold">Mã Hàng</span><br> <!-- Đổi sang font-semibold -->
                         <em class="font-semibold">(Code)</em> <!-- Đổi sang font-semibold -->
                     </th>
@@ -145,16 +124,13 @@
                         <span class="font-semibold">Số Lượng</span><br> <!-- Đổi sang font-semibold -->
                         <em class="font-normal">(Quantity)</em>
                     </th>
-                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;"
-                        id="th-trung-bay">
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;" id="th-trung-bay">
                         <span class="font-semibold">Trưng Bày</span> <!-- Đổi sang font-semibold -->
                     </th>
-                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;"
-                        id="th-tieu-hao">
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 8%;" id="th-tieu-hao">
                         <span class="font-semibold">Tiêu Hao</span> <!-- Đổi sang font-semibold -->
                     </th>
-                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12.5%;"
-                        id="th-ghi-chu">
+                    <th rowspan="2" class="border border-black p-1 text-center bg-gray-100" style="width: 12.5%;" id="th-ghi-chu">
                         <span class="font-semibold">Ghi Chú</span><br> <!-- Đổi sang font-semibold -->
                         <em class="font-normal">(Lot)</em>
                     </th>
@@ -164,31 +140,27 @@
                         <span class="font-semibold">Yêu Cầu</span> <!-- Đổi sang font-semibold -->
                     </th>
                     <th class="border border-black p-1 text-center bg-gray-100">
-                        <span class="font-semibold" id="sl-header-text">Thực Xuất/Nhập</span>
-                        <!-- Đổi sang font-semibold -->
+                        <span class="font-semibold" id="sl-header-text">Thực Xuất/Nhập</span> <!-- Đổi sang font-semibold -->
                     </th>
                 </tr>
             </thead>
             <tbody id="chi-tiet-table-body">
             </tbody>
             <tfoot class="font-semibold"> <!-- Đổi sang font-semibold -->
-                <tr class="bg-gray-100"> <!-- Thêm lại bg-gray-100 -->
-                    <td colspan="4" class="border border-black p-1 text-center font-semibold bg-gray-100">Tổng</td>
-                    <!-- Đổi sang font-semibold -->
-                    <td id="total-ycsl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td>
-                    <!-- Đổi sang font-semibold -->
-                    <td id="total-sl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td>
-                    <!-- Đổi sang font-semibold -->
+                 <tr class="bg-gray-100"> <!-- Thêm lại bg-gray-100 -->
+                    <td colspan="4" class="border border-black p-1 text-center font-semibold bg-gray-100">Tổng</td> <!-- Đổi sang font-semibold -->
+                    <td id="total-ycsl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td> <!-- Đổi sang font-semibold -->
+                    <td id="total-sl" class="border border-black p-1 text-center font-semibold bg-gray-100"></td> <!-- Đổi sang font-semibold -->
                     <td colspan="3" class="border border-black p-1 bg-gray-100" id="tfoot-colspan"></td>
                 </tr>
             </tfoot>
         </table>
-
+        
         <!-- Dòng xác nhận mới - chỉ hiện khi là phiếu NHẬP -->
         <div id="confirmation-line" class="hidden text-left text-[10px] italic">
             Xác nhận hàng hóa đã được kiểm đếm & nhập kho đầy đủ / Goods have been checked & received thoroughly
         </div>
-
+        
         <div id="signature-section" class="hidden pt-0.000001 mt-4">
             <div class="flex justify-between text-center text-[10px]">
                 <div>
@@ -217,16 +189,12 @@
                     <br><em class="ml-4">Only appointed personnel have the rights to sign this Delivery Order</em>
                 </li>
                 <li>
-                    Vui lòng thông báo cho Thủ kho 4 tiếng trước khi nhận hàng để Thủ kho có thể chuẩn bị hàng hóa sẵn
-                    sàng
-                    <br><em class="ml-4">Please inform Storeman at least 4 hours in advance for necessary
-                        arrangement</em>
+                    Vui lòng thông báo cho Thủ kho 4 tiếng trước khi nhận hàng để Thủ kho có thể chuẩn bị hàng hóa sẵn sàng
+                    <br><em class="ml-4">Please inform Storeman at least 4 hours in advance for necessary arrangement</em>
                 </li>
                 <li>
-                    Việc nhận hàng được thực hiện tại kho và người nhận hàng phải đeo thẻ nhân viên JNJ và xuất trình
-                    Phiếu xuất kho khi nhận hàng
-                    <br><em class="ml-4">The process must only be conducted at store and receiver have to wear JNJ
-                        employee card and present Delivery Order</em>
+                    Việc nhận hàng được thực hiện tại kho và người nhận hàng phải đeo thẻ nhân viên JNJ và xuất trình Phiếu xuất kho khi nhận hàng
+                    <br><em class="ml-4">The process must only be conducted at store and receiver have to wear JNJ employee card and present Delivery Order</em>
                 </li>
             </ol>
         </div>
@@ -265,26 +233,26 @@
             try {
                 const { data: dhData, error: dhError } = await sb.from('don_hang').select('*').eq('ma_kho', ma_kho).single();
                 if (dhError || !dhData) throw new Error(dhError?.message || 'Không tìm thấy đơn hàng.');
-
+                
                 donHangData = dhData;
-
+                
                 const { data: ctData, error: ctError } = await sb.from('chi_tiet').select('*').eq('ma_kho', ma_kho).order('stt', { ascending: true });
                 if (ctError) throw new Error(ctError.message);
-
+                
                 chiTietData = ctData;
 
                 // Render Header data
                 const isXuat = donHangData.ma_kho.startsWith('OUT');
-
+                
                 // --- Hiển thị dòng xác nhận nếu là phiếu NHẬP ---
                 if (!isXuat) { // Thay đổi từ isXuat sang !isXuat
                     document.getElementById('confirmation-line').classList.remove('hidden');
                 }
                 // --- Hết ---
-
+                
                 document.getElementById('main-title').textContent = isXuat ? 'PHIẾU XUẤT KHO (DELIVERY ORDER)' : 'PHIẾU NHẬP KHO (RECEIPT ORDER)';
                 document.getElementById('sl-header-text').textContent = isXuat ? 'Thực Xuất' : 'Thực Nhập';
-
+                
                 document.getElementById('sub-title-label').textContent = isXuat ? 'Số Phiếu xuất kho (DO No) :' : 'Số Phiếu nhập kho (RO No) :';
                 document.getElementById('sub-title-value').textContent = `MDDMKT2025_${donHangData.ma_nx}`;
 
@@ -328,7 +296,7 @@
                     const lotDisplay = sl === 0 ? '<span class="font-semibold">0</span>' : (item.lot || ''); // Đổi sang font-semibold
                     const trungBay = item.loai === 'Trưng Bày' ? 'X' : '';
                     const tieuHao = item.loai === 'Tiêu Hao' ? 'X' : '';
-
+                    
                     // --- Chỉ thêm cell nếu là phiếu XUẤT ---
                     const trungBayCell = isXuat ? `<td class="border border-black p-1 text-center font-semibold">${trungBay}</td>` : ''; // Đổi sang font-semibold
                     const tieuHaoCell = isXuat ? `<td class="border border-black p-1 text-center font-semibold">${tieuHao}</td>` : ''; // Đổi sang font-semibold
@@ -366,16 +334,16 @@
                 document.getElementById('error-state').classList.remove('hidden');
             }
         }
-
+        
         function getDynamicFilename(extension) {
             const typeText = donHangData.ma_kho.startsWith('OUT') ? 'ThucXuat' : 'ThucNhap';
             const mucDich = sanitizeFileName(donHangData.muc_dich);
             const yeuCau = sanitizeFileName(donHangData.yeu_cau);
             return `${typeText}-${mucDich}-${yeuCau}.${extension}`;
         }
-
+        
         /* Đã xoá hàm handlePdfExport() không còn sử dụng */
-
+        
         /* Thêm lại hàm handlePdfExport (đổi tên thành handleAutoPdfExport) */
         async function handleAutoPdfExport() {
             const printableArea = document.getElementById('printable-area');
@@ -387,24 +355,24 @@
             if (signatureToggle.checked) {
                 signatureSection.classList.remove('hidden');
             }
-
+            
             // Workaround cho lỗi nền bg-gray-100
             const bgElements = printableArea.querySelectorAll('.bg-gray-100');
             bgElements.forEach(el => {
                 el.style.backgroundColor = '#f3f4f6'; // Tailwind's gray-100
             });
-
+            
             // Workaround cho lỗi font-semibold
             const fontElements = printableArea.querySelectorAll('.font-semibold');
             fontElements.forEach(el => {
                 el.style.fontWeight = '600'; // Thử set FONT-WEIGHT trực tiếp
             });
-
+            
             const slElements = printableArea.querySelectorAll('.text-green-600, .text-red-600');
             slElements.forEach(el => {
                 el.style.fontWeight = '600';
             });
-
+            
             const maHangElements = printableArea.querySelectorAll('.font-semibold');
             maHangElements.forEach(el => {
                 el.style.fontWeight = '600';
@@ -434,9 +402,9 @@
 
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
-
+                
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-
+                
                 // 4. Tự động lưu
                 pdf.save(getDynamicFilename('pdf'));
 
@@ -465,7 +433,7 @@
 
         function handleExcelExport() {
             if (!donHangData || chiTietData.length === 0) return;
-
+            
             const isXuat = donHangData.ma_kho.startsWith('OUT');
             const title = isXuat ? 'PHIẾU XUẤT KHO' : 'PHIẾU NHẬP KHO';
             const date = new Date(donHangData.thoi_gian);
@@ -479,7 +447,7 @@
                 ["Ghi chú ĐH:", donHangData.ghi_chu || ''],
                 [],
             ];
-
+            
             // --- Cập nhật Header Excel ---
             let tableHeader = ["No", "Tên Hàng (Item)", "Mã Hàng (Code)", "Đơn Vị (Unit)", "Yêu Cầu (YCSL)", slHeaderText];
             if (isXuat) {
@@ -490,7 +458,7 @@
 
             let totalSl = 0;
             let totalYcsl = 0;
-
+            
             // --- Cập nhật Data Excel ---
             const tableData = chiTietData.map((item, index) => {
                 const sl = isXuat ? item.xuat : item.nhap;
@@ -525,23 +493,23 @@
                 [],
                 ["", "Người Lập Phiếu", "", "Thủ Kho"],
                 ["", "(Ký, ghi rõ họ tên)", "", "(Ký, ghi rõ họ tên)"],
-                [], [], [],
+                [],[],[],
                 ["", donHangData.yeu_cau]
             ];
-
+            
             const finalData = headerData.concat([tableHeader], tableData, footerData);
-
+            
             const ws = XLSX.utils.aoa_to_sheet(finalData);
-
+            
             // --- Cập nhật Merges và Cols Excel ---
             const maxColIndex = isXuat ? 8 : 6; // 8 cột nếu là Xuất, 6 cột nếu là Nhập
-
+            
             ws['!merges'] = [
                 { s: { r: 0, c: 0 }, e: { r: 0, c: maxColIndex } }, // Title merge
                 { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
                 { s: { r: 4, c: 1 }, e: { r: 4, c: maxColIndex } } // Mục đích merge
             ];
-
+            
             let cols = [
                 { wch: 5 }, { wch: 40 }, { wch: 15 }, { wch: 8 }, { wch: 8 }, { wch: 15 } // No, Ten, Ma, DV, YCSL, SL
             ];
@@ -549,7 +517,7 @@
                 cols.push({ wch: 10 }, { wch: 10 }); // Trung Bay, Tieu Hao
             }
             cols.push({ wch: 25 }); // Ghi Chu
-
+            
             ws['!cols'] = cols;
             // --- Hết ---
 
@@ -568,7 +536,7 @@
                 // Tiêu đề sẽ được đổi bằng sự kiện 'beforeprint'
                 window.print();
             });
-
+            
             // Trước khi cửa sổ in bật lên
             window.addEventListener('beforeprint', () => {
                 if (donHangData) {
@@ -588,13 +556,12 @@
                 // window.print(); // Gọi chức năng in giống hệt nút "In Phiếu"
                 handleAutoPdfExport(); // Gọi hàm tự động lưu mới
             });
-
+            
             document.getElementById('excel-btn').addEventListener('click', handleExcelExport);
             document.getElementById('signature-toggle').addEventListener('change', (e) => {
                 document.getElementById('signature-section').classList.toggle('hidden', !e.target.checked);
-            });
+                });
         });
     </script>
 </body>
-
 </html>
