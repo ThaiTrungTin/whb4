@@ -995,7 +995,6 @@ async function handleExportMessage() {
                 guiText = guiText.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
             }
 
-            messageText += `Nội dung : ${muc_dich}\n`;
             messageText += `Gửi : ${guiText}\n`;
             messageText += `Số Lượng : ${slText}\n`;
             messageText += `-------\n\n`;
