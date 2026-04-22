@@ -543,7 +543,7 @@ function renderDonHangTable(data) {
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-field="ghi_chu">
                         <div class="cell-content cursor-help whitespace-pre-wrap min-w-[450px]" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
                     </td>
-                    <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell">
+                    <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell outline-none focus:ring-2 focus:ring-blue-300" tabindex="0">
                         <div class="inline-file-upload-overlay absolute inset-0 bg-blue-500 bg-opacity-5 hidden group-hover:flex items-center justify-center pointer-events-none">
                             <svg class="w-4 h-4 text-blue-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                         </div>
@@ -1837,7 +1837,7 @@ export function initDonHangView() {
         const row = e.target.closest('tr'); if (!row || !row.dataset.id) return;
         const id = row.dataset.id;
         
-        if (e.target.closest('.ma-kho-cell') || e.target.closest('.file-cell')) {
+        if (e.target.closest('.ma-kho-cell')) {
             const optimisticData = cache.donHangList.find(dh => dh.ma_kho === id);
             if (!optimisticData) return;
 
@@ -2541,6 +2541,16 @@ export function attachDonHangTableListeners() {
             const ma_kho = cell.closest('tr').dataset.id;
             const files = e.dataTransfer.files;
             handleInlineFileDrop(files, ma_kho);
+        }
+    };
+
+    // Paste file trực tiếp vào ô
+    tableBody.onpaste = (e) => {
+        const cell = e.target.closest('.dropzone-cell');
+        if (cell && e.clipboardData.files.length > 0) {
+            e.preventDefault();
+            const ma_kho = cell.closest('tr').dataset.id;
+            handleInlineFileDrop(e.clipboardData.files, ma_kho);
         }
     };
 }
