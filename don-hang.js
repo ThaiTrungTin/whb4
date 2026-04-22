@@ -533,13 +533,22 @@ function renderDonHangTable(data) {
                 <tr data-id="${dh.ma_kho}" class="hover:bg-gray-50 ${isSelected ? 'bg-blue-100' : ''}">
                     <td class="px-1 py-2 border border-gray-300 text-center"><input type="checkbox" class="don-hang-select-row" data-id="${dh.ma_kho}" ${isSelected ? 'checked' : ''}></td>
                     <td class="px-1 py-2 text-sm font-medium border border-gray-300 text-center cursor-pointer ma-kho-cell">${maKhoHtml}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${thoi_gian}</td>
-                    <td class="px-1 py-2 text-sm border border-gray-300 text-center ${maNxClass}">${dh.ma_nx || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center whitespace-nowrap">${thoi_gian}</td>
+                    <td class="px-1 py-2 text-sm border border-gray-300 text-center right-click-edit-cell" data-field="ma_nx">
+                        <div class="cell-content ${maNxClass} cursor-help font-bold" title="Chuột phải để sửa">${dh.ma_nx || ''}</div>
+                    </td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.yeu_cau || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.nganh || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 whitespace-pre-wrap border border-gray-300 text-left">${dh.muc_dich || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 whitespace-pre-wrap border border-gray-300 text-left">${dh.ghi_chu || ''}</td>
-                    <td class="px-3 py-2 border border-gray-300 text-center file-cell">${fileIcon}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left whitespace-pre-wrap min-w-[120px]">${dh.muc_dich || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-field="ghi_chu">
+                        <div class="cell-content cursor-help whitespace-pre-wrap min-w-[450px]" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
+                    </td>
+                    <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell">
+                        <div class="inline-file-upload-overlay absolute inset-0 bg-blue-500 bg-opacity-5 hidden group-hover:flex items-center justify-center pointer-events-none">
+                            <svg class="w-4 h-4 text-blue-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        </div>
+                        ${fileIcon}
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -2301,6 +2310,8 @@ export function initDonHangView() {
     };
     pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }});
     pageInput.addEventListener('change', handlePageJump);
+    
+    attachDonHangTableListeners();
 }
 
 export async function executeSaveOrderJob(payload) {
@@ -2347,4 +2358,192 @@ export async function executeSaveOrderJob(payload) {
 
     const loai_don = donHangData.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
     await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
+}async function updateDonHangField(ma_kho, field, value) {
+    const dh = cache.donHangList.find(item => item.ma_kho === ma_kho);
+    if (!dh || dh[field] === value) {
+        renderDonHangTable(cache.donHangList);
+        return;
+    }
+
+    showLoading(true);
+    try {
+        const { error } = await sb.from('don_hang').update({ [field]: value }).eq('ma_kho', ma_kho);
+        if (error) throw error;
+        dh[field] = value;
+        showToast(`Đã cập nhật ${field === 'ma_nx' ? 'Mã NX' : 'Ghi chú'} cho đơn ${ma_kho}`, 'success');
+        renderDonHangTable(cache.donHangList);
+    } catch (error) {
+        showToast(`Lỗi cập nhật: ${error.message}`, 'error');
+        fetchDonHang(viewStates['view-don-hang'].currentPage, false);
+    } finally {
+        showLoading(false);
+    }
 }
+
+function enterInlineEditMode(cell) {
+    const field = cell.dataset.field;
+    const ma_kho = cell.closest('tr').dataset.id;
+    const dh = cache.donHangList.find(item => item.ma_kho === ma_kho);
+    const currentValue = dh ? dh[field] : '';
+
+    cell.classList.add('bg-blue-50', 'z-10');
+    
+    let inputHtml = '';
+    if (field === 'ma_nx') {
+        inputHtml = `<input type="text" class="w-full p-2 border-2 border-blue-400 rounded text-center font-bold text-sm" value="${currentValue || ''}">`;
+    } else {
+        inputHtml = `<textarea class="w-full p-2 border-2 border-blue-400 rounded text-sm" rows="4">${currentValue || ''}</textarea>`;
+    }
+
+    cell.innerHTML = `
+        <div class="flex flex-col gap-2 p-1 min-w-[200px]">
+            ${inputHtml}
+            <div class="flex justify-end gap-2">
+                <button class="save-inline-btn bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 shadow-md flex items-center gap-1 font-bold text-xs" title="Lưu và Khóa">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    XÁC NHẬN
+                </button>
+                <button class="cancel-inline-btn bg-gray-500 text-white px-3 py-1.5 rounded hover:bg-gray-600 shadow-md font-bold text-xs" title="Hủy">
+                    HỦY
+                </button>
+            </div>
+        </div>
+    `;
+
+    const input = cell.querySelector('input, textarea');
+    
+    // NÂNG CẤP: Logic thông minh cho Ghi chú (giống trong form)
+    if (field === 'ghi_chu') {
+        input.addEventListener('focus', function() {
+            if (!this.value.trim()) {
+                this.value = 'Số Lượng :  ... Kiện';
+                const pos = 13;
+                setTimeout(() => this.setSelectionRange(pos, pos + 3), 0);
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                const text = this.value;
+                const before = text.substring(0, start);
+                const after = text.substring(end);
+                const separator = '\n_____________\nSố Lượng :  ... Kiện';
+                this.value = before + separator + after;
+                const newPos = start + separator.length - 8;
+                this.setSelectionRange(newPos, newPos + 3);
+            }
+        });
+    }
+
+    input.focus();
+    if (input.select && field !== 'ghi_chu') input.select(); // Không select hết nếu là ghi chú để focus vào đúng chỗ ...
+
+    cell.querySelector('.save-inline-btn').onclick = (e) => {
+        e.stopPropagation();
+        const newValue = input.value.trim();
+        updateDonHangField(ma_kho, field, newValue);
+    };
+
+    cell.querySelector('.cancel-inline-btn').onclick = (e) => {
+        e.stopPropagation();
+        renderDonHangTable(cache.donHangList); 
+    };
+    
+    // Chặn sự kiện click để không bị chọn dòng khi đang sửa
+    cell.onclick = (e) => e.stopPropagation();
+}
+
+async function handleInlineFileDrop(files, ma_kho) {
+    if (!files || files.length === 0) return;
+    
+    showLoading(true);
+    try {
+        const { data: currentDh, error: fetchError } = await sb.from('don_hang').select('file').eq('ma_kho', ma_kho).single();
+        if (fetchError) throw fetchError;
+        
+        const existingFiles = parseFileArray(currentDh.file);
+        const uploadedUrls = [];
+        
+        for (const file of Array.from(files)) {
+            const safeFileName = sanitizeFileName(file.name);
+            const filePath = `${ma_kho}/${Date.now()}-${safeFileName}`;
+            const { data, error: uploadError } = await sb.storage.from('file_don_hang').upload(filePath, file);
+            if (uploadError) throw uploadError;
+            
+            const { data: urlData } = sb.storage.from('file_don_hang').getPublicUrl(data.path);
+            uploadedUrls.push(urlData.publicUrl);
+        }
+        
+        const newFiles = [...existingFiles, ...uploadedUrls];
+        const { error: updateError } = await sb.from('don_hang').update({ file: newFiles }).eq('ma_kho', ma_kho);
+        if (updateError) throw updateError;
+        
+        showToast(`Đã tải lên ${files.length} file cho đơn ${ma_kho}`, 'success');
+        
+        const dh = cache.donHangList.find(item => item.ma_kho === ma_kho);
+        if (dh) dh.file = newFiles;
+        
+        renderDonHangTable(cache.donHangList);
+    } catch (error) {
+        showToast(`Lỗi tải file: ${error.message}`, 'error');
+        console.error("Drop upload error:", error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Gán sự kiện cho bảng để hỗ trợ sửa nhanh và kéo thả
+export function attachDonHangTableListeners() {
+    const tableBody = document.getElementById('don-hang-table-body');
+    if (!tableBody) return;
+
+    // Chuột phải để sửa
+    tableBody.oncontextmenu = (e) => {
+        const cell = e.target.closest('.right-click-edit-cell');
+        if (cell) {
+            e.preventDefault();
+            e.stopPropagation();
+            enterInlineEditMode(cell);
+        }
+    };
+
+    // Kéo thả file trực tiếp vào dòng
+    tableBody.ondragenter = (e) => {
+        const cell = e.target.closest('.dropzone-cell');
+        if (cell) cell.classList.add('bg-blue-100');
+    };
+
+    tableBody.ondragover = (e) => {
+        const cell = e.target.closest('.dropzone-cell');
+        if (cell) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
+    tableBody.ondragleave = (e) => {
+        const cell = e.target.closest('.dropzone-cell');
+        if (cell) cell.classList.remove('bg-blue-100');
+    };
+
+    tableBody.ondrop = (e) => {
+        const cell = e.target.closest('.dropzone-cell');
+        if (cell) {
+            e.preventDefault();
+            e.stopPropagation();
+            cell.classList.remove('bg-blue-100');
+            
+            const ma_kho = cell.closest('tr').dataset.id;
+            const files = e.dataTransfer.files;
+            handleInlineFileDrop(files, ma_kho);
+        }
+    };
+}
+
+// Tự động gọi khi load module
+setTimeout(attachDonHangTableListeners, 500);
