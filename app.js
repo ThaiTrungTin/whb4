@@ -1150,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         for (const gmail in state) {
                             const userPresences = state[gmail];
                             if (userPresences && userPresences.length > 0) {
+                                // Nếu có nhiều phiên đăng nhập, ưu tiên trạng thái 'online'
                                 const activePresence = userPresences.find(p => p.status === 'online') || userPresences[0];
                                 onlineUsers.set(gmail, activePresence);
                             }
@@ -1225,14 +1226,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 60000);
 
     // Gán sự kiện cho nút làm mới danh sách online (nếu có)
+    // Xóa listener cũ của nút làm mới nếu có
     const refreshOnlineBtn = document.getElementById('refresh-online-users');
     if (refreshOnlineBtn) {
-        refreshOnlineBtn.addEventListener('click', () => {
-            if (presenceChannel) {
-                showToast('Đang làm mới trạng thái...', 'info');
-                initPresence();
-            }
-        });
+        // Nút này sẽ bị xóa khỏi HTML, nhưng nếu còn tồn tại tạm thời thì xóa logic của nó
+        refreshOnlineBtn.classList.add('hidden');
     }
     
     document.getElementById('close-image-viewer-btn').addEventListener('click', () => {
