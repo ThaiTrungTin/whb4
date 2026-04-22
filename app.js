@@ -1156,6 +1156,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         updateOnlineStatusUI();
                     })
+                    .on('broadcast', { event: 'user_offline' }, ({ payload }) => {
+                        if (payload && payload.gmail) {
+                            onlineUsers.delete(payload.gmail);
+                            updateOnlineStatusUI();
+                        }
+                    })
                     .subscribe(async (status) => {
                         if (status === 'SUBSCRIBED') {
                             await presenceChannel.track({ 
@@ -1197,7 +1203,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     window.addEventListener('beforeunload', () => {
         if (currentView) sessionStorage.setItem('lastViewId', currentView);
+        if (presenceChannel && currentUser) {
+            presenceChannel.send({
+                type: 'broadcast',
+                event: 'user_offline',
+                payload: { gmail: currentUser.gmail }
+            });
+        }
     });
+
+    // Cập nhật trạng thái định kỳ mỗi 1 phút để giữ kết nối "tươi"
+    setInterval(() => {
+        if (presenceChannel && currentUser && document.visibilityState === 'visible') {
+            presenceChannel.track({ 
+                user_ho_ten: currentUser.ho_ten, 
+                user_avatar_url: currentUser.anh_dai_dien_url,
+                status: 'online',
+                t: Date.now()
+            });
+        }
+    }, 60000);
+
+    // Gán sự kiện cho nút làm mới danh sách online (nếu có)
+    const refreshOnlineBtn = document.getElementById('refresh-online-users');
+    if (refreshOnlineBtn) {
+        refreshOnlineBtn.addEventListener('click', () => {
+            if (presenceChannel) {
+                showToast('Đang làm mới trạng thái...', 'info');
+                initPresence();
+            }
+        });
+    }
     
     document.getElementById('close-image-viewer-btn').addEventListener('click', () => {
         document.getElementById('image-viewer-modal').classList.add('hidden');
