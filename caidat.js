@@ -7,43 +7,58 @@ let selectedAvatarFile = null;
 async function handleProfileUpdate(e) {
     e.preventDefault();
     const ho_ten = document.getElementById('profile-ho-ten').value;
-    const old_password = document.getElementById('profile-old-password').value;
-    const new_password = document.getElementById('profile-new-password').value;
-    const confirm_password = document.getElementById('profile-confirm-password').value;
+    const old_password = document.getElementById('profile-old-password').value.trim();
+    const new_password = document.getElementById('profile-new-password').value.trim();
+    const confirm_password = document.getElementById('profile-confirm-password').value.trim();
     let anh_dai_dien_url = document.getElementById('profile-current-avatar-url').value;
     const old_anh_dai_dien_url = currentUser.anh_dai_dien_url;
 
-    if (currentUser.mat_khau !== old_password) {
-        showToast("Mật khẩu cũ không chính xác.", 'error');
-        return;
-    }
-    if (new_password && new_password !== confirm_password) {
-        showToast("Mật khẩu mới không khớp.", 'error');
-        return;
-    }
-    
-    if (ho_ten !== currentUser.ho_ten) {
-        const { count, error } = await sb
-            .from('user')
-            .select('ho_ten', { count: 'exact', head: true })
-            .eq('ho_ten', ho_ten)
-            .neq('gmail', currentUser.gmail);
-
-        if (error) {
-            showToast(`Lỗi kiểm tra tên: ${error.message}`, 'error');
-            return;
-        }
-
-        if (count > 0) {
-            showToast('Tên này đã được người dùng khác sử dụng.', 'error');
-            return;
-        }
-    }
-
-
     showLoading(true);
-
+    
     try {
+        // Kiểm tra mật khẩu chính xác từ Database
+        const { data: userFromDb, error: fetchError } = await sb
+            .from('user')
+            .select('mat_khau')
+            .eq('gmail', currentUser.gmail)
+            .single();
+
+        if (fetchError || !userFromDb) {
+            throw new Error("Không thể xác thực người dùng.");
+        }
+
+        if (userFromDb.mat_khau !== old_password) {
+            showToast("Mật khẩu cũ không chính xác.", 'error');
+            showLoading(false);
+            return;
+        }
+
+        if (new_password && new_password !== confirm_password) {
+            showToast("Mật khẩu mới không khớp.", 'error');
+            showLoading(false);
+            return;
+        }
+    
+        if (ho_ten !== currentUser.ho_ten) {
+            const { count, error } = await sb
+                .from('user')
+                .select('ho_ten', { count: 'exact', head: true })
+                .eq('ho_ten', ho_ten)
+                .neq('gmail', currentUser.gmail);
+
+            if (error) {
+                showToast(`Lỗi kiểm tra tên: ${error.message}`, 'error');
+                showLoading(false);
+                return;
+            }
+
+            if (count > 0) {
+                showToast('Tên này đã được người dùng khác sử dụng.', 'error');
+                showLoading(false);
+                return;
+            }
+        }
+
         if (selectedAvatarFile) {
             const safeFileName = sanitizeFileName(`${currentUser.gmail}-${Date.now()}-${selectedAvatarFile.name}`);
             const filePath = `public/${safeFileName}`;
@@ -68,14 +83,28 @@ async function handleProfileUpdate(e) {
         const { data, error } = await sb.from('user').update(updateData).eq('gmail', currentUser.gmail).select().single();
         if (error) throw error;
         
-        showToast("Cập nhật thông tin thành công!", "success");
-        sessionStorage.setItem('loggedInUser', JSON.stringify(data));
-        
-        document.getElementById('user-ho-ten').textContent = data.ho_ten || 'User';
-        document.getElementById('profile-form').reset();
-        document.getElementById('profile-ho-ten').value = data.ho_ten;
-        updateSidebarAvatar(data.anh_dai_dien_url);
-        initProfileAvatarState();
+        if (new_password) {
+            showToast("Đổi mật khẩu thành công! Vui lòng đăng nhập lại.", "success");
+            setTimeout(() => {
+                sessionStorage.clear();
+                window.location.href = 'login.html';
+            }, 2000);
+        } else {
+            showToast("Cập nhật thông tin thành công!", "success");
+            
+            // Cập nhật dữ liệu vào Session và biến toàn cục
+            sessionStorage.setItem('loggedInUser', JSON.stringify(data));
+            Object.assign(currentUser, data); 
+            
+            // Cập nhật giao diện ngay lập tức
+            const userHoTenEl = document.getElementById('user-ho-ten');
+            if (userHoTenEl) userHoTenEl.textContent = data.ho_ten || 'User';
+            
+            document.getElementById('profile-form').reset();
+            document.getElementById('profile-ho-ten').value = data.ho_ten;
+            updateSidebarAvatar(data.anh_dai_dien_url);
+            initProfileAvatarState();
+        }
 
     } catch (error) {
         showToast(`Cập nhật thất bại: ${error.message}`, 'error');
