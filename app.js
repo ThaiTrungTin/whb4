@@ -1130,40 +1130,48 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .subscribe();
             }
 
-            presenceChannel = sb.channel('online-users', {
-              config: {
-                presence: {
-                  key: currentUser.gmail,
-                },
-              },
-            });
+            function initPresence() {
+                if (presenceChannel) {
+                    sb.removeChannel(presenceChannel);
+                }
 
-            presenceChannel
-                .on('presence', { event: 'sync' }, () => {
-                    const state = presenceChannel.presenceState();
-                    onlineUsers.clear();
-                    for (const gmail in state) {
-                        onlineUsers.set(gmail, state[gmail][0]);
-                    }
-                    updateOnlineStatusUI();
-                })
-                .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-                    onlineUsers.set(key, newPresences[0]);
-                    updateOnlineStatusUI();
-                })
-                .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-                    onlineUsers.delete(key);
-                    updateOnlineStatusUI();
-                })
-                .subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        await presenceChannel.track({ 
-                            user_ho_ten: currentUser.ho_ten, 
-                            user_avatar_url: currentUser.anh_dai_dien_url,
-                            status: document.visibilityState === 'visible' ? 'online' : 'away'
-                        });
-                    }
+                presenceChannel = sb.channel('online-users', {
+                    config: {
+                        presence: {
+                            key: currentUser.gmail,
+                        },
+                    },
                 });
+
+                presenceChannel
+                    .on('presence', { event: 'sync' }, () => {
+                        const state = presenceChannel.presenceState();
+                        onlineUsers.clear();
+                        for (const gmail in state) {
+                            const userPresences = state[gmail];
+                            if (userPresences && userPresences.length > 0) {
+                                const activePresence = userPresences.find(p => p.status === 'online') || userPresences[0];
+                                onlineUsers.set(gmail, activePresence);
+                            }
+                        }
+                        updateOnlineStatusUI();
+                    })
+                    .subscribe(async (status) => {
+                        if (status === 'SUBSCRIBED') {
+                            await presenceChannel.track({ 
+                                user_ho_ten: currentUser.ho_ten, 
+                                user_avatar_url: currentUser.anh_dai_dien_url,
+                                status: document.visibilityState === 'visible' ? 'online' : 'away'
+                            });
+                        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                            setTimeout(() => {
+                                if (currentUser) initPresence(); 
+                            }, 5000);
+                        }
+                    });
+            }
+
+            initPresence();
             
             document.addEventListener('visibilitychange', () => {
                 if (!presenceChannel) return;
