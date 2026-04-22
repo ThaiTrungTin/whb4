@@ -539,9 +539,9 @@ function renderDonHangTable(data) {
                     </td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.yeu_cau || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.nganh || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left whitespace-pre-wrap min-w-[120px]">${dh.muc_dich || ''}</td>
+                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left whitespace-pre-wrap min-w-[80px]">${dh.muc_dich || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-field="ghi_chu">
-                        <div class="cell-content cursor-help whitespace-pre-wrap min-w-[450px]" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
+                        <div class="cell-content cursor-help whitespace-pre-wrap min-w-[550px]" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
                     </td>
                     <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell outline-none focus:ring-2 focus:ring-blue-300" tabindex="0">
                         <div class="inline-file-upload-overlay absolute inset-0 bg-blue-500 bg-opacity-5 hidden group-hover:flex items-center justify-center pointer-events-none">
