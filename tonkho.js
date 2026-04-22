@@ -253,14 +253,19 @@ function renderTonKhoTable(data) {
                 <tr data-id="${tk.ma_vach}" class="hover:bg-gray-50 ${isSelected ? 'bg-blue-100' : ''}">
                     <td class="px-1 py-2 border border-gray-300 text-center"><input type="checkbox" class="ton-kho-select-row" data-id="${tk.ma_vach}" ${isSelected ? 'checked' : ''}></td>
                     <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left cursor-pointer text-blue-600 hover:underline ma-vach-cell">${tk.ma_vach}</td>
-                    <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">
-                        <div class="flex items-center justify-between group">
-                            <span class="cursor-pointer text-blue-600 font-bold hover:underline ton-kho-view-details-btn" data-ma-vt="${tk.ma_vt}">${tk.ma_vt}</span>
-                            <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600" data-ma-vt="${tk.ma_vt}" title="Copy mã">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                            </button>
-                        </div>
-                    </td>
+                        <td class="px-1 py-2 text-sm font-medium text-gray-900 border border-gray-300 text-left">
+                            <div class="flex items-center justify-between group">
+                                <span class="cursor-pointer text-blue-600 font-bold hover:underline ton-kho-view-details-btn" data-ma-vt="${tk.ma_vt}">${tk.ma_vt}</span>
+                                <div class="flex items-center">
+                                    <button class="ton-kho-print-label-btn p-1 text-gray-400 hover:text-purple-600" data-ma-vach="${tk.ma_vach}" title="In nhãn">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                                    </button>
+                                    <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600" data-ma-vt="${tk.ma_vt}" title="Copy mã">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
                     <td class="px-1 py-2 text-sm text-gray-600 break-words border border-gray-300 text-left">${tk.ten_vt}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">
                         <div class="flex items-center justify-center group gap-1">
@@ -604,6 +609,14 @@ export function initTonKhoView() {
                 return;
             }
 
+            // In nhãn tồn kho
+            const printBtn = e.target.closest('.ton-kho-print-label-btn');
+            if (printBtn) {
+                e.stopPropagation();
+                handleTonKhoPrintIndividual(printBtn.dataset.maVach);
+                return;
+            }
+
             const row = e.target.closest('tr');
             if (!row || !row.dataset.id) return;
             const id = row.dataset.id;
@@ -770,7 +783,6 @@ export function initTonKhoView() {
         });
         pageInput.addEventListener('change', handlePageJump);
     }
-    
     const toggleColsBtn = document.getElementById('ton-kho-toggle-cols');
     if (toggleColsBtn) {
         toggleColsBtn.addEventListener('click', () => {
@@ -779,4 +791,81 @@ export function initTonKhoView() {
             applyTonKhoColumnState();
         });
     }
+}
+
+async function handleTonKhoPrintIndividual(maVach) {
+    const tk = cache.tonKhoList.find(t => t.ma_vach === maVach);
+    if (!tk) return;
+
+    const modal = document.getElementById('ton-kho-print-modal');
+    const qtyInput = document.getElementById('ton-kho-print-custom-qty');
+    const allBtn = document.getElementById('ton-kho-print-all-btn');
+    const customBtn = document.getElementById('ton-kho-print-custom-btn');
+    const cancelBtn = document.getElementById('ton-kho-print-cancel-btn');
+
+    qtyInput.value = tk.ton_cuoi;
+    modal.classList.remove('hidden');
+    setTimeout(() => qtyInput.select(), 100);
+
+    const doPrint = (qty) => {
+        modal.classList.add('hidden');
+        printSingleTonKhoLabel(tk, qty);
+    };
+
+    allBtn.onclick = () => doPrint(tk.ton_cuoi);
+    customBtn.onclick = () => doPrint(qtyInput.value);
+    qtyInput.onkeydown = (e) => { if (e.key === 'Enter') doPrint(qtyInput.value); };
+    cancelBtn.onclick = () => modal.classList.add('hidden');
+}
+
+function printSingleTonKhoLabel(tk, sl) {
+    const labelArea = document.getElementById('label-area');
+    if (!labelArea) return;
+
+    const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
+    const pad = (n) => n.toString().padStart(2, '0');
+    const d = new Date();
+    const formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    const nganh_display = (tk.nganh || '').replace(/\bESC\b/g, '').replace(/\s+-\s+-+/g, ' -').replace(/-\s*$/, '').trim();
+
+    labelArea.innerHTML = `
+        <div class="label-item">
+            <!-- Viền bao quanh đảm bảo không bị mất nét -->
+            <div style="position: absolute; inset: 0; border: 1px solid black; z-index: 50; pointer-events: none;"></div>
+            
+            <img src="${logoUrl}" style="position: absolute; top: -16px; left: 6px; width: 160px; height: auto; object-fit: contain; z-index: 0;" alt="Logo">
+            <div style="position: relative; z-index: 10;">
+                <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid black; padding-bottom: 4px; margin-bottom: 8px;">
+                    <div style="display: flex; flex-direction: column; max-width: 75%;">
+                        <div style="height: 40px; width: 100%;"></div> 
+                        <span style="font-size: 1.875rem; line-height: 1; font-weight: 900; letter-spacing: -0.025em; word-break: break-all; margin-top: -4px; color: black;">${tk.ma_vt}</span>
+                    </div>
+                    <div style="text-align: right; font-size: 0.75rem; line-height: 1.25; min-width: 50px; margin-top: 4px; background-color: white; text-transform: uppercase;">
+                        <div>SL: <span style="font-size: 1rem; color: black;">${sl}</span></div>
+                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 2px;">
+                             <svg xmlns="http://www.w3.org/2000/svg" style="height: 12px; width: 12px;" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                            </svg>
+                            <span style="font-size: 0.875rem; color: black;">${tk.tray || ''}</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: 0.75rem; font-weight: 700; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px dashed black; color: black;">
+                    <div style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px;">LOT: ${tk.lot || ''}</div>
+                    <div style="text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 4px;">DATE: ${tk.date || ''}</div>
+                </div>
+                <div style="font-size: 0.875rem; font-weight: 600; line-height: 1.25; text-align: left; color: black;">${tk.ten_vt}</div>
+                
+                <!-- Đường kẻ ngang ngăn cách -->
+                <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid black;"></div>
+                
+                <div style="font-size: 8px; text-align: right; font-style: italic; color: black; margin-top: 4px;">${formattedPrintTime}</div>
+            </div>
+        </div>
+    `;
+
+    document.body.classList.add('printing-labels');
+    window.print();
+    document.body.classList.remove('printing-labels');
+    labelArea.innerHTML = '';
 }

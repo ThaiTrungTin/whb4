@@ -10,7 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -188,6 +188,46 @@
             scrollbar-color: #cbd5e1 #f1f5f9;
             /* Dành cho Firefox */
         }
+        /* --- CẤU HÌNH IN NHÃN TỪ TỒN KHO --- */
+        @media print {
+            @page { margin: 0; } /* Xóa lề mặc định của trình duyệt */
+            body { margin: 0; padding: 0; }
+            body *:not(#label-area):not(#label-area *) {
+                display: none !important;
+            }
+            #label-area {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding-left: 5mm; /* Thêm khoảng trống bên trái giống print-pkl */
+                padding-top: 5mm;
+            }
+            body { background: white !important; }
+        }
+
+        #label-area { display: none; }
+        body.printing-labels #label-area { display: block; }
+
+        .label-item {
+            width: 70mm;
+            padding: 6px;
+            margin-top: 5mm; /* Thêm margin top để không mất nét trên */
+            margin-bottom: 5mm;
+            margin-left: 0; /* Căn lề trái */
+            font-family: Tahoma, sans-serif;
+            page-break-inside: avoid;
+            display: block;
+            background: white;
+            box-sizing: border-box;
+            position: relative;
+            color: black;
+            border: 1px solid black;
+        }
+        .label-item img { filter: grayscale(100%) contrast(200%) !important; }
+        .label-item * { font-weight: 700 !important; }
     </style>
     <script type="importmap">
 {
@@ -1640,6 +1680,34 @@
         </div>
     </div>
 
+    <div id="ton-kho-print-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center modal-backdrop">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">In Nhãn Tồn Kho</h3>
+            <div class="space-y-4">
+                <button id="ton-kho-print-all-btn" class="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-md group">
+                    <div class="text-left">
+                        <p class="font-semibold text-blue-800">In tất cả</p>
+                        <p class="text-xs text-blue-600">In nhãn với toàn bộ số lượng tồn cuối.</p>
+                    </div>
+                    <svg class="w-6 h-6 text-blue-600 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                </button>
+                
+                <div class="p-4 bg-gray-50 rounded-md border border-gray-200">
+                    <p class="font-semibold text-gray-700 text-sm mb-2">In tùy chọn số lượng:</p>
+                    <div class="flex gap-2">
+                        <input type="number" id="ton-kho-print-custom-qty" class="flex-grow p-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none text-center font-bold" placeholder="Nhập SL...">
+                        <button id="ton-kho-print-custom-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold">IN</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2 italic">* Nhập số lượng và ấn Enter hoặc nút IN</p>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6">
+                <button id="ton-kho-print-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="label-area"></div>
     <iframe id="print-iframe" style="display:none;"></iframe>
     <script src="app.js" type="module"></script>
 
