@@ -167,6 +167,14 @@
                 margin-top: 2mm;
             }
 
+            /* Tăng kích thước Phiếu Vận Chuyển để bù cho tỉ lệ in 65% */
+            body.printing-shipping .shipping-label {
+                transform: scale(1.38) !important;
+                transform-origin: top left;
+                margin-bottom: 35mm !important; /* Tăng khoảng cách vì bị scale */
+                margin-left: 5mm !important;
+            }
+
             body.printing-labels .label-item {
                 margin-bottom: 5mm;
             }
@@ -675,11 +683,15 @@
 
             // Tách các khối theo dấu gạch ngang (7 dấu hoặc nhiều hơn)
             const blocks = rawText.split(/-{7,}/).map(b => b.trim()).filter(b => b.length > 0);
-
-            blocks.forEach(block => {
+blocks.forEach(block => {
                 // Parse Mã NX, Ngành, Yêu Cầu từ dòng đầu tiên: (1) DO-2026-EES | WHB4 - ESC - Tran Canh Phuc
                 const headerMatch = block.match(/\(\d+\)\s*([^|]+)\s*\|\s*WHB4\s*-\s*([^-]+)\s*-\s*([^\n]+)/);
                 let ma_nx = headerMatch ? headerMatch[1].trim() : 'CUSTOM';
+                let display_ma_nx = ma_nx;
+                if (ma_nx.endsWith('-')) {
+                    display_ma_nx += '<span class="font-light tracking-[0.2em]"> . . .</span>';
+                }
+                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 6 : 0);
                 let nganh = headerMatch ? headerMatch[2].trim() : 'N/A';
                 let yeu_cau = headerMatch ? headerMatch[3].trim() : 'N/A';
                 let yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
@@ -700,7 +712,6 @@
                     if (!isNaN(matchedNum)) totalKien = matchedNum;
                 }
 
-                const ma_nx_len = ma_nx.length || 1;
                 const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
 
                 for (let i = 1; i <= totalKien; i++) {
@@ -712,7 +723,7 @@
                             <div class="border-t border-dashed border-black w-full"></div>
                             <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
                                  <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
-                                 <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${ma_nx}</div>
+                                 <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
                             </div>
                             <div class="sl-section">
                                 <div class="flex items-baseline gap-2">
@@ -739,10 +750,10 @@
             labelArea.innerHTML = allLabelsHTML;
 
             setTimeout(() => {
-                document.body.classList.add('printing-labels');
+                document.body.classList.add('printing-labels', 'printing-shipping');
                 setTimeout(() => {
                     window.print();
-                    document.body.classList.remove('printing-labels');
+                    document.body.classList.remove('printing-labels', 'printing-shipping');
                 }, 500);
             }, 100);
         }
@@ -763,9 +774,12 @@
                 const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
                 const rawGhiChu = (dhData.ghi_chu || '').trim();
                 const muc_dich = (dhData.muc_dich || '').trim();
-                const ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
-
-                const ma_nx_len = ma_nx.length || 1;
+                let ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
+                let display_ma_nx = ma_nx;
+                if (ma_nx.endsWith('-')) {
+                    display_ma_nx += '<span class="font-light tracking-[0.2em]"> . . .</span>';
+                }
+                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 6 : 0);
                 const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
 
                 // Phân tách ghi chú theo đường kẻ
@@ -798,7 +812,7 @@
                                 <div class="border-t border-dashed border-black w-full"></div>
                                 <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
                                      <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
-                                     <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${ma_nx}</div>
+                                     <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
                                 </div>
                                 <div class="sl-section">
                                     <div class="flex items-baseline gap-2">
@@ -826,10 +840,10 @@
             labelArea.innerHTML = allLabelsHTML;
 
             setTimeout(() => {
-                document.body.classList.add('printing-labels');
+                document.body.classList.add('printing-labels', 'printing-shipping');
                 setTimeout(() => {
                     window.print();
-                    document.body.classList.remove('printing-labels');
+                    document.body.classList.remove('printing-labels', 'printing-shipping');
                 }, 500);
             }, 100);
         };
@@ -1104,7 +1118,7 @@
                 })
                 .subscribe();
 
-            // 2. Lắng nghe thay đổi từ bảng đơn hàng (Delete)
+            // 2. Lắng nghe thay đổi từ bảng đơn hàng (Delete & Update)
             const channelDh = sb.channel('db_changes_pkl_don_hang')
                 .on('postgres_changes', {
                     event: 'DELETE',
@@ -1119,6 +1133,38 @@
                         document.getElementById('error-message').textContent = "Đơn hàng này đã bị xóa khỏi hệ thống.";
                         document.getElementById('error-state').classList.remove('hidden');
                         alert("CẢNH BÁO: Đơn hàng bạn đang làm việc vừa bị xóa bởi một người khác!");
+                    }
+                })
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'don_hang'
+                }, payload => {
+                    const newItem = payload.new;
+                    if (maKhoList.includes(newItem.ma_kho)) {
+                        // Cập nhật dữ liệu cục bộ trong danh sách đơn hàng
+                        const orderIdx = window.allOrdersData.findIndex(o => o.ma_kho === newItem.ma_kho);
+                        if (orderIdx !== -1) {
+                            window.allOrdersData[orderIdx] = { ...window.allOrdersData[orderIdx], ...newItem };
+                        }
+
+                        // Nếu là đơn hàng đang hiển thị chính, cập nhật và render lại
+                        if (window.globalDhData.ma_kho === newItem.ma_kho) {
+                            window.globalDhData = { ...window.globalDhData, ...newItem };
+                            renderA4();
+                            
+                            // Hiệu ứng thông báo cập nhật
+                            const header = document.querySelector('h2');
+                            if (header) {
+                                const originalText = header.textContent;
+                                header.textContent = "DỮ LIỆU ĐÃ CẬP NHẬT!";
+                                header.classList.add('text-green-600');
+                                setTimeout(() => {
+                                    header.textContent = originalText;
+                                    header.classList.remove('text-green-600');
+                                }, 2000);
+                            }
+                        }
                     }
                 })
                 .subscribe();
