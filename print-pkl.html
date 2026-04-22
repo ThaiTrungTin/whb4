@@ -116,6 +116,9 @@
                 background-color: white;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
+                margin: 0 !important;
+                padding: 0 !important;
+                zoom: 100% !important; /* Ép zoom về 100% khi in */
             }
 
             .no-print {
@@ -127,10 +130,12 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 100%;
+                width: 240mm;
                 margin: 0;
                 border: none;
                 box-shadow: none;
+                transform: scale(1) !important; /* Đảm bảo không bị scale */
+                transform-origin: top left;
             }
 
             body:not(.printing-labels) #label-area {
@@ -146,7 +151,10 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 100%;
+                width: 80mm; /* Ép cứng độ rộng container cho máy in POS */
+                zoom: 100% !important;
+                transform: scale(1) !important;
+                transform-origin: top left;
             }
 
             @page {

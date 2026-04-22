@@ -200,12 +200,16 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 100%;
+                width: 80mm; /* Cố định độ rộng cho máy in tem */
                 margin: 0;
-                padding-left: 5mm; /* Thêm khoảng trống bên trái giống print-pkl */
+                padding-left: 5mm;
                 padding-top: 5mm;
+                zoom: 100% !important;
             }
-            body { background: white !important; }
+            body { 
+                background: white !important; 
+                zoom: 100% !important;
+            }
         }
 
         #label-area { display: none; }
