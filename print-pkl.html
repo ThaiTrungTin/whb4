@@ -322,6 +322,37 @@
         window.globalDhData = {};
         window.allOrdersData = []; // Lưu trữ dữ liệu khi in hàng loạt
 
+        async function getPendingAmountsByMaVach(maVachList, currentMaKho) {
+            const pendingMap = new Map();
+            if (!maVachList || maVachList.length === 0) return pendingMap;
+            maVachList.forEach(mv => pendingMap.set(mv, { nhap: 0, xuat: 0 }));
+
+            const { data: pendingOrders, error: ordersError } = await sb.from('don_hang')
+                .select('ma_kho')
+                .like('ma_nx', '%-');
+            
+            if (ordersError || !pendingOrders || pendingOrders.length === 0) return pendingMap;
+
+            const pendingMaKhoList = pendingOrders.filter(o => o.ma_kho !== currentMaKho).map(o => o.ma_kho);
+            if (pendingMaKhoList.length === 0) return pendingMap;
+
+            const { data: pendingChiTiet, error: chiTietError } = await sb.from('chi_tiet')
+                .select('ma_vach, nhap, xuat')
+                .in('ma_kho', pendingMaKhoList)
+                .in('ma_vach', maVachList);
+
+            if (chiTietError) return pendingMap;
+
+            (pendingChiTiet || []).forEach(item => {
+                if (pendingMap.has(item.ma_vach)) {
+                    const current = pendingMap.get(item.ma_vach);
+                    current.nhap += (item.nhap || 0);
+                    current.xuat += (item.xuat || 0);
+                }
+            });
+            return pendingMap;
+        }
+
         async function fetchAndRenderData() {
             const urlParams = new URLSearchParams(window.location.search);
             const ma_kho_param = urlParams.get('ma_kho');
@@ -357,23 +388,29 @@
                 let tonKhoMap = new Map();
 
                 if (maVachList.length > 0) {
-                    const { data: tonKhoData, error: tkError } = await sb.from('ton_kho_update').select('ma_vach, tray').in('ma_vach', maVachList);
+                    const { data: tonKhoData, error: tkError } = await sb.from('ton_kho_update').select('ma_vach, tray, ton_cuoi').in('ma_vach', maVachList);
                     if (tkError) throw new Error(tkError.message);
                     (tonKhoData || []).forEach(item => tonKhoMap.set(item.ma_vach, item));
+
+                    const pendingMap = await getPendingAmountsByMaVach(maVachList, ma_kho_param);
+
+                    window.globalCtData = ctData.map(item => {
+                        const tk = tonKhoMap.get(item.ma_vach);
+                        return {
+                            ...item,
+                            tray: tk?.tray || 'N/A',
+                            ton_cuoi: tk?.ton_cuoi || 0,
+                            pendingXuat: pendingMap.get(item.ma_vach)?.xuat || 0
+                        };
+                    });
+
+                    renderA4();
+
+                    // Nếu có mode=shipping, tự động kích hoạt in nhãn cho tất cả
+                    if (mode === 'shipping') {
+                        window.handlePrintShippingLabel();
+                    }
                 }
-
-                window.globalCtData = ctData.map(item => ({
-                    ...item,
-                    tray: tonKhoMap.get(item.ma_vach)?.tray || 'N/A'
-                }));
-
-                renderA4();
-
-                // Nếu có mode=shipping, tự động kích hoạt in nhãn cho tất cả
-                if (mode === 'shipping') {
-                    window.handlePrintShippingLabel();
-                }
-
             } catch (error) {
                 console.error(error);
                 document.getElementById('loading-state').classList.add('hidden');
@@ -405,9 +442,11 @@
                 const yc_sl = item.yc_sl || 0;
                 totalSl += sl;
                 totalYcsl += yc_sl;
+                window.totalSlToDisplay = totalSl; // Lưu lại để dùng cho bộ đếm
+
 
                 return `
-                    <tr class="h-8 hover:bg-gray-50">
+                    <tr class="h-8 hover:bg-gray-50 border-b border-gray-200">
                         <td class="border border-black p-1 text-center">${item.stt || index + 1}</td>
                         <td class="border border-black p-1 text-left">${item.ma_vt}</td>
                         <td class="border border-black p-1 text-left">${item.ten_vt}</td>
@@ -416,17 +455,35 @@
                         <td class="border border-black p-1 text-center">${item.tray}</td>
                         <td class="border border-black p-1 text-center">${yc_sl}</td>
                         <td class="border border-black p-1 text-center">${sl}</td>
-                        <td class="border border-black p-1 text-center no-print align-middle">
-                            <input type="checkbox" 
-                                class="w-5 h-5 cursor-pointer accent-blue-600 print-checkbox" 
-                                data-index="${index}"
-                                title="Tick để in ngay, hoặc chọn để in hàng loạt"
-                                onchange="window.printSingleLabelIfChecked(${index}, this)"
-                            >
+                        <td class="border border-black p-1 text-center no-print align-middle relative min-w-[150px]">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" 
+                                    class="w-5 h-5 cursor-pointer accent-blue-600 print-checkbox flex-shrink-0" 
+                                    data-index="${index}"
+                                    title="Tick để in ngay, hoặc chọn để in hàng loạt"
+                                    onchange="window.updateSelectionCounter(); window.printSingleLabelIfChecked(${index}, this)"
+                                >
+                                <div class="text-[10px] text-left leading-tight text-gray-500 whitespace-nowrap">
+                                    Chờ: <span class="font-bold text-orange-600">${item.pendingXuat}</span> | Tồn cuối: <span class="font-bold text-blue-600">${item.ton_cuoi}</span>
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 `;
             }).join('');
+
+            // Thêm hàng Counter ở cuối bảng (trong tfoot hoặc sau tbody)
+            const selectionCounterRow = `
+                <tr class="no-print bg-blue-50 font-bold border-t-2 border-blue-200">
+                    <td colspan="7" class="text-right p-2 border-l border-b border-black">
+                        Đã chọn: <span id="selected-count">0</span> / ${ctData.length}
+                    </td>
+                    <td colspan="2" class="text-center p-2 border-r border-b border-black text-blue-700 whitespace-nowrap">
+                        <span id="selected-qty-total">0 / ${totalSl}</span>
+                    </td>
+                </tr>
+            `;
+            tableBody.insertAdjacentHTML('beforeend', selectionCounterRow);
 
             const headerTotalSl = document.getElementById('header-total-sl');
             const headerTotalYcsl = document.getElementById('header-total-ycsl');
@@ -476,6 +533,12 @@
                             <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white">
                                 <div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>
                                 <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
+                                <div class="flex items-center justify-end gap-1 mt-0.5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="font-bold text-sm text-black">${item.tray || ''}</span>
+                                </div>
                             </div>
                         </div>
                         
@@ -709,6 +772,33 @@
             }, 500);
         };
 
+        window.updateSelectionCounter = function() {
+            const checkedBoxes = document.querySelectorAll('.print-checkbox:checked');
+            const counterEl = document.getElementById('selected-count');
+            const qtyTotalEl = document.getElementById('selected-qty-total');
+            
+            if (counterEl) {
+                counterEl.textContent = checkedBoxes.length;
+            }
+
+            if (qtyTotalEl) {
+                let totalSlSelected = 0;
+                const isXuat = window.globalDhData.ma_kho && window.globalDhData.ma_kho.startsWith('OUT');
+
+                checkedBoxes.forEach(cb => {
+                    const index = parseInt(cb.getAttribute('data-index'));
+                    const item = window.globalCtData[index];
+                    if (item) {
+                        totalSlSelected += isXuat ? (item.xuat || 0) : (item.nhap || 0);
+                    }
+                });
+                
+                // Hiển thị: [Tổng SL đã chọn] / [Tổng SL toàn phiếu]
+                const totalSlAll = window.totalSlToDisplay || 0;
+                qtyTotalEl.textContent = `${totalSlSelected} / ${totalSlAll}`;
+            }
+        };
+
         window.isSelectingAll = false;
         document.getElementById('select-all').addEventListener('change', function (e) {
             window.isSelectingAll = true;
@@ -719,6 +809,7 @@
                 cb.checked = isChecked;
             });
 
+            window.updateSelectionCounter();
             setTimeout(() => { window.isSelectingAll = false; }, 100);
         });
 
