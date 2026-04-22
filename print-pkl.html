@@ -21,9 +21,9 @@
 
         /* Khu vực phiếu A4 */
         #printable-area {
-            width: 210mm;
+            width: 240mm;
             min-height: 297mm;
-            padding: 15mm;
+            padding: 10mm 8mm;
             margin: 10mm auto;
             border: 1px #D1D1D1 solid;
             background: white;
@@ -269,27 +269,35 @@
         <table class="w-full border-collapse">
             <thead class="bg-gray-100 font-bold">
                 <tr>
-                    <th class="border border-black p-1 text-center" style="width: 4%;">STT</th>
-                    <th class="border border-black p-1 text-center" style="width: 12%;">Mã VT</th>
-                    <th class="border border-black p-1 text-center" style="width: 42%;">Tên VT</th>
+                    <th class="border border-black p-1 text-center" style="width: 3%;">STT</th>
+                    <th class="border border-black p-1 text-center" style="width: 10%;">Mã VT</th>
+                    <th class="border border-black p-1 text-center" style="width: 37%;">Tên VT</th>
                     <th class="border border-black p-1 text-center" style="width: 10%;">Lot</th>
                     <th class="border border-black p-1 text-center" style="width: 8%;">Date</th>
                     <th class="border border-black p-1 text-center" style="width: 8%;">Tray</th>
-                    <th class="border border-black p-1 text-center" style="width: 6%;">Y/C</th>
-                    <th class="border border-black p-1 text-center" style="width: 6%;">SL</th>
-                    <th class="border border-black p-1 text-center no-print" style="width: 4%;">
+                    <th class="border border-black p-1 text-center" style="width: 5%;">Y/C</th>
+                    <th class="border border-black p-1 text-center" style="width: 5%;">SL</th>
+                    <th class="border border-black p-1 text-center no-print" style="width: 9%;">
                         <input type="checkbox" id="select-all" class="w-4 h-4 cursor-pointer accent-blue-600"
-                            title="Chọn tất cả (Không in ngay)">
+                            title="Chọn tất cả để in hàng loạt">
                     </th>
+                    <th class="border border-black p-1 text-center no-print" style="width: 5%;">Tem</th>
                 </tr>
             </thead>
             <tbody id="chi-tiet-table-body"></tbody>
             <tfoot class="font-bold">
                 <tr class="bg-gray-100">
-                    <td colspan="6" class="border border-black p-1 text-center">Tổng</td>
+                    <td colspan="6" class="border border-black p-1 text-center">TỔNG CỘNG</td>
                     <td id="tfoot-total-ycsl" class="border border-black p-1 text-center"></td>
                     <td id="tfoot-total-sl" class="border border-black p-1 text-center"></td>
-                    <td class="border border-black p-1 text-center no-print"></td>
+                    <td class="border border-black p-1 text-center no-print text-blue-700 bg-blue-50 relative">
+                        <div class="text-[8px] leading-tight text-gray-500 uppercase">Đã chọn</div>
+                        <span id="selected-count">0</span>
+                    </td>
+                    <td class="border border-black p-1 text-center no-print text-blue-700 bg-blue-50">
+                        <div class="text-[8px] leading-tight text-gray-500 uppercase">SL chọn</div>
+                        <span id="selected-qty-total" class="font-bold">0 / 0</span>
+                    </td>
                 </tr>
             </tfoot>
         </table>
@@ -443,6 +451,15 @@
             tableBody.innerHTML = ctData.map((item, index) => {
                 const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
                 const yc_sl = item.yc_sl || 0;
+                
+                let slClass = "";
+                if (sl === yc_sl && yc_sl !== 0) {
+                    slClass = "text-green-700 font-black";
+                } else if (sl > 0) {
+                    slClass = "text-amber-600 font-black";
+                } else {
+                    slClass = "text-red-700 font-medium";
+                }
                 totalSl += sl;
                 totalYcsl += yc_sl;
                 window.totalSlToDisplay = totalSl; // Lưu lại để dùng cho bộ đếm
@@ -461,38 +478,39 @@
                         <td class="border border-black p-1 text-center">${item.date || ''}</td>
                         <td class="border border-black p-1 text-center">${item.tray}</td>
                         <td class="border border-black p-1 text-center">${yc_sl}</td>
-                        <td class="border border-black p-1 text-center">${sl}</td>
-                        <td class="border border-black p-1 text-center no-print align-middle relative min-w-[150px]">
-                            <div class="flex items-center gap-2">
+                        <td class="border border-black p-1 text-center ${slClass}">${sl}</td>
+                        <td class="border border-black p-1 text-center no-print align-middle relative">
+                            <div class="flex items-center gap-1.5">
                                 <input type="checkbox" 
                                     class="w-5 h-5 cursor-pointer accent-blue-600 print-checkbox flex-shrink-0" 
                                     data-index="${index}"
                                     data-id="${item.id}"
                                     ${item.is_printed ? 'checked' : ''}
-                                    title="Tick để in ngay, hoặc chọn để in hàng loạt"
+                                    title="Chọn để in nhãn soạn hàng"
                                     onchange="window.updateItemPrintedStatus(${index}, this); window.printSingleLabelIfChecked(${index}, this)"
                                 >
-                                <div class="text-[10px] text-left leading-tight text-gray-500 whitespace-nowrap">
-                                    Chờ: <span class="font-bold text-orange-600">${item.pendingXuat}</span> | Tồn cuối: <span class="font-bold text-blue-600">${item.ton_cuoi}</span>
+                                <div class="flex flex-col text-[10px] text-left leading-tight text-gray-400 font-medium whitespace-nowrap">
+                                    <div>Chờ: <span class="font-bold text-orange-600">${item.pendingXuat}</span></div>
+                                    <div>Tồn cuối: <span class="font-bold text-blue-600">${item.ton_cuoi}</span></div>
                                 </div>
+                            </div>
+                        </td>
+                        <td class="border border-black p-1 text-center no-print align-middle">
+                            <div class="flex flex-col items-center gap-0.5">
+                                <span class="text-[9px] text-gray-400 font-bold cursor-pointer hover:text-blue-600 transition-colors" 
+                                    title="Ấn vào đây để in nhanh"
+                                    onclick="window.printRelabelByValue(this.nextElementSibling.value, ${index})">Lable:</span>
+                                <input type="number" 
+                                    class="w-11 h-5 p-0 border rounded text-[10px] text-center border-gray-300 focus:border-blue-500 outline-none print-relabel-input" 
+                                    value="${item.ton_cuoi}" 
+                                    onfocus="this.select()"
+                                    onkeydown="if(event.key === 'Enter') { window.printRelabelByValue(this.value, ${index}) }"
+                                >
                             </div>
                         </td>
                     </tr>
                 `;
             }).join('');
-
-            // Thêm hàng Counter ở cuối bảng (trong tfoot hoặc sau tbody)
-            const selectionCounterRow = `
-                <tr class="no-print bg-blue-50 font-bold border-t-2 border-blue-200">
-                    <td colspan="7" class="text-right p-2 border-l border-b border-black">
-                        Đã chọn: <span id="selected-count">0</span> / ${ctData.length}
-                    </td>
-                    <td colspan="2" class="text-center p-2 border-r border-b border-black text-blue-700 whitespace-nowrap">
-                        <span id="selected-qty-total">0 / ${totalSl}</span>
-                    </td>
-                </tr>
-            `;
-            tableBody.insertAdjacentHTML('beforeend', selectionCounterRow);
 
             const headerTotalSl = document.getElementById('header-total-sl');
             const headerTotalYcsl = document.getElementById('header-total-ycsl');
@@ -515,9 +533,11 @@
             return str;
         }
 
-        function generateLabelHTML(item) {
+        function generateLabelHTML(item, isRelabel = false) {
             const isXuat = window.globalDhData.ma_kho && window.globalDhData.ma_kho.startsWith('OUT');
-            const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
+            let sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
+            if (isRelabel && item.customSl !== undefined) sl = item.customSl;
+
             const yc_sl = item.yc_sl || 0;
             const muc_dich = (window.globalDhData.muc_dich || '').trim();
             const nganh = (window.globalDhData.nganh || '').trim();
@@ -525,30 +545,27 @@
             const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
             const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
 
-            // Định dạng thời gian tick
+            const nganh_display = nganh.replace(/\bESC\b/g, '').replace(/\s+-\s+-+/g, ' -').replace(/-\s*$/, '').trim();
+
             let formattedPrintTime = '';
-            if (item.print_time) {
-                const d = new Date(item.print_time);
-                const pad = (n) => n.toString().padStart(2, '0');
-                formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-            }
+            const d = item.print_time ? new Date(item.print_time) : new Date();
+            const pad = (n) => n.toString().padStart(2, '0');
+            formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 
             return `
                 <div class="label-item">
                     <div class="absolute inset-0 border border-black z-50 pointer-events-none"></div>
                     
-                    <!-- ĐÃ SỬA: Bỏ mix-blend-multiply để không bị nền xám -->
                     <img src="${logoUrl}" class="absolute -top-4 left-1.5 w-40 h-auto object-contain z-0" alt="Logo">
                     
                     <div class="relative z-10">
                         <div class="flex justify-between items-start border-b border-black pb-1 mb-2">
                             <div class="flex flex-col max-w-[75%]">
                                 <div class="h-10 w-full"></div> 
-                                <!-- ĐÃ SỬA: Bỏ mix-blend-multiply để không bị nền xám -->
                                 <span class="text-3xl font-black tracking-tight leading-none break-words -mt-1 text-black">${item.ma_vt}</span>
                             </div>
-                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white">
-                                <div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>
+                            <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white uppercase">
+                                ${isRelabel ? '' : `<div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>`}
                                 <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
                                 <div class="flex items-center justify-end gap-1 mt-0.5">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -569,16 +586,75 @@
                         </div>
                         
                         <div class="mt-1 pt-1 text-[10px] italic text-black border-t border-black">
-                            <span class="font-bold not-italic text-black">${nganh}</span> - 
-                            <span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - 
-                            ${muc_dich}
+                            <span class="font-bold not-italic text-black">${nganh_display}</span> 
+                            ${isRelabel ? '' : ` - <span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - ${muc_dich}`}
                         </div>
-                        <div class="text-[8px] text-right italic text-black mt-0.5">
+                        <div class="text-[8px] text-right italic text-black mt-1">
                             ${formattedPrintTime}
                         </div>
                     </div>
                 </div>
             `;
+        }
+
+        window.showRelabelInput = function (btn, index) {
+            const item = window.globalCtData[index];
+            const parent = btn.parentElement;
+            
+            // Ẩn nút nhấn và số lượng cũ
+            btn.classList.add('hidden');
+            const stockSpan = parent.querySelector('span');
+            if (stockSpan) stockSpan.classList.add('hidden');
+
+            // Tạo input mới
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = item.ton_cuoi;
+            input.className = "w-12 h-6 p-1 border border-blue-500 rounded text-xs text-center font-bold outline-none shadow-sm";
+            
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    window.printRelabelByValue(input.value, index);
+                    // Sau khi in xong, hiện lại nút bấm
+                    input.remove();
+                    btn.classList.remove('hidden');
+                    if (stockSpan) stockSpan.classList.remove('hidden');
+                } else if (e.key === 'Escape') {
+                    input.remove();
+                    btn.classList.remove('hidden');
+                    if (stockSpan) stockSpan.classList.remove('hidden');
+                }
+            };
+
+            // Khi click ra ngoài thì hủy bỏ
+            const blurHandler = () => {
+                setTimeout(() => {
+                    if (document.activeElement !== input) {
+                        input.remove();
+                        btn.classList.remove('hidden');
+                        if (stockSpan) stockSpan.classList.remove('hidden');
+                    }
+                }, 100);
+            };
+            input.onblur = blurHandler;
+
+            parent.appendChild(input);
+            input.focus();
+            input.select(); // Tự động tô đen
+        }
+
+        window.printRelabelByValue = function (value, index) {
+            const item = window.globalCtData[index];
+            if (!item) return;
+
+            const customSl = parseFloat(value);
+            if (isNaN(customSl)) return;
+
+            const labelArea = document.getElementById('label-area');
+            labelArea.innerHTML = generateLabelHTML({ ...item, customSl: customSl }, true);
+            
+            document.body.classList.add('printing-labels');
+            window.print();
         }
 
         window.handleCustomShippingPrint = function () {

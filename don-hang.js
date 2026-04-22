@@ -829,7 +829,26 @@ function openLotSelectorPopover(inputElement, item) {
         );
 
         if (filteredOptions.length > 0) {
-            filteredOptions.sort((a, b) => b.ton_cuoi - a.ton_cuoi);
+            filteredOptions.sort((a, b) => {
+                // 1. Ưu tiên có tồn kho lên trước
+                const aHasStock = a.ton_cuoi > 0 ? 1 : 0;
+                const bHasStock = b.ton_cuoi > 0 ? 1 : 0;
+                if (aHasStock !== bHasStock) return bHasStock - aHasStock;
+
+                // 2. Ưu tiên Date gần lên trước (FEFO)
+                const parseDateStr = (d) => {
+                    if (!d) return "99999999";
+                    const p = d.split('/');
+                    if (p.length !== 3) return d;
+                    return p[2] + p[1].padStart(2, '0') + p[0].padStart(2, '0');
+                };
+                const dateA = parseDateStr(a.date);
+                const dateB = parseDateStr(b.date);
+                if (dateA !== dateB) return dateA < dateB ? -1 : 1;
+
+                // 3. Nếu trùng date, ưu tiên SL xuất lớn hơn
+                return (b.xuat || 0) - (a.xuat || 0);
+            });
 
             optionsList.innerHTML = filteredOptions.map(opt => {
                 const tonKhoClass = opt.ton_cuoi > 0 ? 'text-green-600' : 'text-red-600';
