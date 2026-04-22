@@ -330,7 +330,7 @@
             const { data: pendingOrders, error: ordersError } = await sb.from('don_hang')
                 .select('ma_kho')
                 .like('ma_nx', '%-');
-            
+
             if (ordersError || !pendingOrders || pendingOrders.length === 0) return pendingMap;
 
             const pendingMaKhoList = pendingOrders.filter(o => o.ma_kho !== currentMaKho).map(o => o.ma_kho);
@@ -377,7 +377,7 @@
 
                 // Sắp xếp lại theo đúng thứ tự maKhoList
                 window.allOrdersData = maKhoList.map(mk => dhsData.find(d => d.ma_kho === mk)).filter(Boolean);
-                
+
                 // Mặc định hiển thị đơn hàng đầu tiên cho view A4
                 window.globalDhData = window.allOrdersData[0];
 
@@ -403,13 +403,16 @@
                             pendingXuat: pendingMap.get(item.ma_vach)?.xuat || 0
                         };
                     });
+                } else {
+                    window.globalCtData = ctData;
+                }
 
-                    renderA4();
+                renderA4();
+                setupRealtimeSubscription(maKhoList);
 
-                    // Nếu có mode=shipping, tự động kích hoạt in nhãn cho tất cả
-                    if (mode === 'shipping') {
-                        window.handlePrintShippingLabel();
-                    }
+                // Nếu có mode=shipping, tự động kích hoạt in nhãn cho tất cả
+                if (mode === 'shipping') {
+                    window.handlePrintShippingLabel();
                 }
             } catch (error) {
                 console.error(error);
@@ -445,10 +448,14 @@
                 window.totalSlToDisplay = totalSl; // Lưu lại để dùng cho bộ đếm
 
 
+                const isDisplayItem = item.loai === 'Trưng Bày';
+                const displayStyle = isDisplayItem ? 'text-red-600 font-bold underline cursor-help' : '';
+                const displayTitle = isDisplayItem ? 'title="Return to WH"' : '';
+
                 return `
                     <tr class="h-8 hover:bg-gray-50 border-b border-gray-200">
                         <td class="border border-black p-1 text-center">${item.stt || index + 1}</td>
-                        <td class="border border-black p-1 text-left">${item.ma_vt}</td>
+                        <td class="border border-black p-1 text-left ${displayStyle}" ${displayTitle}>${item.ma_vt}</td>
                         <td class="border border-black p-1 text-left">${item.ten_vt}</td>
                         <td class="border border-black p-1 text-center">${item.lot || ''}</td>
                         <td class="border border-black p-1 text-center">${item.date || ''}</td>
@@ -460,8 +467,10 @@
                                 <input type="checkbox" 
                                     class="w-5 h-5 cursor-pointer accent-blue-600 print-checkbox flex-shrink-0" 
                                     data-index="${index}"
+                                    data-id="${item.id}"
+                                    ${item.is_printed ? 'checked' : ''}
                                     title="Tick để in ngay, hoặc chọn để in hàng loạt"
-                                    onchange="window.updateSelectionCounter(); window.printSingleLabelIfChecked(${index}, this)"
+                                    onchange="window.updateItemPrintedStatus(${index}, this); window.printSingleLabelIfChecked(${index}, this)"
                                 >
                                 <div class="text-[10px] text-left leading-tight text-gray-500 whitespace-nowrap">
                                     Chờ: <span class="font-bold text-orange-600">${item.pendingXuat}</span> | Tồn cuối: <span class="font-bold text-blue-600">${item.ton_cuoi}</span>
@@ -516,6 +525,14 @@
             const yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
             const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
 
+            // Định dạng thời gian tick
+            let formattedPrintTime = '';
+            if (item.print_time) {
+                const d = new Date(item.print_time);
+                const pad = (n) => n.toString().padStart(2, '0');
+                formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+            }
+
             return `
                 <div class="label-item">
                     <div class="absolute inset-0 border border-black z-50 pointer-events-none"></div>
@@ -556,12 +573,15 @@
                             <span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - 
                             ${muc_dich}
                         </div>
+                        <div class="text-[8px] text-right italic text-black mt-0.5">
+                            ${formattedPrintTime}
+                        </div>
                     </div>
                 </div>
             `;
         }
 
-        window.handleCustomShippingPrint = function() {
+        window.handleCustomShippingPrint = function () {
             const rawText = sessionStorage.getItem('custom_shipping_info_text');
             if (!rawText) return;
 
@@ -588,7 +608,7 @@
                 // Parse Gửi : (Captures everything until "Số Lượng :" or end of block)
                 const guiMatch = block.match(/Gửi\s*:\s*([\s\S]*?)(?=Số Lượng\s*:|$)/i);
                 let diaChi = guiMatch ? guiMatch[1].trim() : '...................................';
-                
+
                 // Parse Số Lượng : 
                 const slMatch = block.match(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i);
                 let totalKien = 1;
@@ -647,7 +667,7 @@
         window.handlePrintShippingLabel = function () {
             const labelArea = document.getElementById('label-area');
             const logoUrl = "https://mondialbrand.com/wp-content/uploads/2024/01/Mau_thiet_ke_logo_thuong_hieu_cong_ty_JOHNSON-JOHNSON-3.jpg";
-            
+
             labelArea.innerHTML = '';
             let allLabelsHTML = '';
 
@@ -664,7 +684,7 @@
 
                 const ma_nx_len = ma_nx.length || 1;
                 const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
-                
+
                 // Phân tách ghi chú theo đường kẻ
                 const addressParts = rawGhiChu.split(/_{5,}/).map(p => p.trim()).filter(p => p.length > 0);
                 if (addressParts.length === 0 && rawGhiChu) addressParts.push(rawGhiChu);
@@ -673,7 +693,7 @@
                 addressParts.forEach(part => {
                     const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
                     const slMatch = part.match(slRegex);
-                    
+
                     let totalKien = 1;
                     let diaChi = part;
 
@@ -772,11 +792,11 @@
             }, 500);
         };
 
-        window.updateSelectionCounter = function() {
+        window.updateSelectionCounter = function () {
             const checkedBoxes = document.querySelectorAll('.print-checkbox:checked');
             const counterEl = document.getElementById('selected-count');
             const qtyTotalEl = document.getElementById('selected-qty-total');
-            
+
             if (counterEl) {
                 counterEl.textContent = checkedBoxes.length;
             }
@@ -792,7 +812,7 @@
                         totalSlSelected += isXuat ? (item.xuat || 0) : (item.nhap || 0);
                     }
                 });
-                
+
                 // Hiển thị: [Tổng SL đã chọn] / [Tổng SL toàn phiếu]
                 const totalSlAll = window.totalSlToDisplay || 0;
                 qtyTotalEl.textContent = `${totalSlSelected} / ${totalSlAll}`;
@@ -800,18 +820,227 @@
         };
 
         window.isSelectingAll = false;
-        document.getElementById('select-all').addEventListener('change', function (e) {
+        document.getElementById('select-all').addEventListener('change', async function (e) {
             window.isSelectingAll = true;
             const isChecked = e.target.checked;
             const checkboxes = document.querySelectorAll('.print-checkbox');
 
+            const updates = [];
             checkboxes.forEach(cb => {
                 cb.checked = isChecked;
+                const idx = cb.getAttribute('data-index');
+                const itemId = cb.getAttribute('data-id');
+                if (itemId) {
+                    updates.push(window.updateItemPrintedStatus(idx, cb, false)); // Không cần await từng cái
+                }
             });
 
+            await Promise.all(updates);
             window.updateSelectionCounter();
             setTimeout(() => { window.isSelectingAll = false; }, 100);
         });
+
+        // Hàm cập nhật trạng thái vào Database
+        window.updateItemPrintedStatus = async function (index, checkbox, shouldUpdateCounter = true) {
+            const item = window.globalCtData[index];
+            if (!item || !item.id) return;
+
+            const isChecked = checkbox.checked;
+            const now = isChecked ? new Date().toISOString() : null;
+
+            // Cập nhật local data
+            item.is_printed = isChecked;
+            item.print_time = now;
+
+            if (shouldUpdateCounter) window.updateSelectionCounter();
+
+            try {
+                const { error } = await sb.from('chi_tiet')
+                    .update({ is_printed: isChecked, print_time: now })
+                    .eq('id', item.id);
+
+                if (error) throw error;
+            } catch (err) {
+                console.error("Lỗi khi lưu trạng thái:", err);
+            }
+        };
+
+        // Hàm thiết lập Realtime
+        function setupRealtimeSubscription(maKhoList) {
+            // 1. Lắng nghe thay đổi chi tiết hàng hóa (Update và Delete)
+            const channelCt = sb.channel('db_changes_pkl_chi_tiet')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'chi_tiet'
+                }, async payload => {
+                    const eventType = payload.eventType;
+                    const oldItem = payload.old;
+                    const newItem = payload.new;
+
+                    // Xử lý XÓA dòng hàng
+                    if (eventType === 'DELETE') {
+                        const cb = document.querySelector(`.print-checkbox[data-id="${oldItem.id}"]`);
+                        if (cb) {
+                            const row = cb.closest('tr');
+                            row.classList.remove('bg-green-100', 'bg-yellow-200'); // Xóa màu cũ
+                            row.classList.add('bg-red-100'); // Đổi sang màu đỏ cảnh báo xóa
+
+                            const badgeId = `badge-del-${oldItem.id}`;
+                            if (!document.getElementById(badgeId)) {
+                                const badge = document.createElement('span');
+                                badge.id = badgeId;
+                                badge.className = 'ml-2 inline-flex items-center gap-1 text-[9px] bg-red-700 text-white px-1.5 py-0.5 rounded shadow-sm cursor-default';
+                                badge.innerHTML = `
+                                    <span class="animate-pulse font-bold">DELETED</span>
+                                    <button class="bg-white text-green-600 rounded-full hover:bg-green-50 transition-colors p-0.5 confirm-del-btn">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                `;
+                                badge.querySelector('.confirm-del-btn').onclick = (e) => {
+                                    e.stopPropagation();
+                                    const idx = window.globalCtData.findIndex(it => it.id === oldItem.id);
+                                    if (idx !== -1) window.globalCtData.splice(idx, 1);
+                                    row.remove();
+                                    window.updateSelectionCounter();
+                                };
+                                row.querySelectorAll('td')[2].appendChild(badge);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Xử lý CẬP NHẬT hoặc THÊM MỚI
+                    if (!maKhoList.includes(newItem.ma_kho)) return;
+
+                    const idx = window.globalCtData.findIndex(it => it.id === newItem.id);
+                    if (idx !== -1) {
+                        const currentItem = { ...window.globalCtData[idx] };
+
+                        const isXuat = window.globalDhData.ma_kho && window.globalDhData.ma_kho.startsWith('OUT');
+                        const oldSl = isXuat ? (currentItem.xuat || 0) : (currentItem.nhap || 0);
+                        const newSl = isXuat ? (newItem.xuat || 0) : (newItem.nhap || 0);
+
+                        const hasDataChange = newItem.lot !== currentItem.lot ||
+                            newItem.date !== currentItem.date ||
+                            newSl !== oldSl ||
+                            newItem.yc_sl !== currentItem.yc_sl;
+
+                        window.globalCtData[idx] = { ...currentItem, ...newItem };
+
+                        const cb = document.querySelector(`.print-checkbox[data-id="${newItem.id}"]`);
+                        if (cb) {
+                            cb.checked = newItem.is_printed;
+                            const row = cb.closest('tr');
+                            if (row && hasDataChange) {
+                                const tds = row.querySelectorAll('td');
+                                if (tds[3]) tds[3].textContent = newItem.lot || '';
+                                if (tds[4]) tds[4].textContent = newItem.date || '';
+                                if (tds[6]) tds[6].textContent = newItem.yc_sl || 0;
+                                if (tds[7]) tds[7].textContent = newSl;
+
+                                row.classList.remove('bg-yellow-200', 'bg-red-100');
+                                row.classList.add('bg-green-100'); // Màu xanh lá cho cập nhật
+
+                                const badgeId = `badge-upd-${newItem.id}`;
+                                if (!document.getElementById(badgeId)) {
+                                    const badge = document.createElement('span');
+                                    badge.id = badgeId;
+                                    badge.className = 'ml-2 inline-flex items-center gap-1 text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded shadow-sm cursor-default';
+                                    badge.innerHTML = `
+                                        <span class="animate-pulse">UPDATED</span>
+                                        <button class="bg-white text-green-600 rounded-full hover:bg-green-50 transition-colors p-0.5 confirm-update-btn">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    `;
+                                    badge.querySelector('.confirm-update-btn').onclick = (e) => {
+                                        e.stopPropagation();
+                                        row.classList.remove('bg-green-100');
+                                        badge.remove();
+                                    };
+                                    tds[2].appendChild(badge);
+                                }
+                            }
+                        }
+                        window.updateSelectionCounter();
+                    } else if (eventType === 'INSERT') {
+                        if (!maKhoList.includes(newItem.ma_kho)) return;
+                        
+                        // Để đảm bảo dữ liệu tồn kho đầy đủ, ta fetch nhanh thông tin tồn kho cho mặt hàng này
+                        const { data: tkData } = await sb.from('ton_kho_update').select('tray, ton_cuoi').eq('ma_vach', newItem.ma_vach).maybeSingle();
+                        
+                        const fullNewItem = {
+                            ...newItem,
+                            tray: tkData?.tray || 'N/A',
+                            ton_cuoi: tkData?.ton_cuoi || 0,
+                            pendingXuat: 0 
+                        };
+
+                        window.globalCtData.push(fullNewItem);
+                        window.globalCtData.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+                        
+                        // Vẽ lại bảng
+                        renderA4();
+
+                        // Highlight dòng vừa thêm
+                        setTimeout(() => {
+                            const cb = document.querySelector(`.print-checkbox[data-id="${newItem.id}"]`);
+                            if (cb) {
+                                const row = cb.closest('tr');
+                                row.classList.remove('bg-green-100');
+                                void row.offsetWidth; // Trigger reflow
+                                row.classList.add('bg-green-100');
+                                
+                                const badgeId = `badge-new-${newItem.id}`;
+                                if (!document.getElementById(badgeId)) {
+                                    const badge = document.createElement('span');
+                                    badge.id = badgeId;
+                                    badge.className = 'ml-2 inline-flex items-center gap-1 text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded shadow-sm cursor-default';
+                                    badge.innerHTML = `
+                                        <span class="animate-pulse font-bold">NEW</span>
+                                        <button class="bg-white text-blue-600 rounded-full hover:bg-blue-50 transition-colors p-0.5 confirm-new-btn">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    `;
+                                    badge.querySelector('.confirm-new-btn').onclick = (e) => {
+                                        e.stopPropagation();
+                                        row.classList.remove('bg-green-100');
+                                        badge.remove();
+                                    };
+                                    row.querySelectorAll('td')[2].appendChild(badge);
+                                }
+                            }
+                        }, 200);
+                    }
+                })
+                .subscribe();
+
+            // 2. Lắng nghe thay đổi từ bảng đơn hàng (Delete)
+            const channelDh = sb.channel('db_changes_pkl_don_hang')
+                .on('postgres_changes', {
+                    event: 'DELETE',
+                    schema: 'public',
+                    table: 'don_hang'
+                }, payload => {
+                    const oldDh = payload.old;
+                    if (maKhoList.includes(oldDh.ma_kho)) {
+                        // Hiện thông báo lỗi ngay lập tức
+                        document.getElementById('printable-area').classList.add('hidden');
+                        document.getElementById('toolbar').classList.add('hidden');
+                        document.getElementById('error-message').textContent = "Đơn hàng này đã bị xóa khỏi hệ thống.";
+                        document.getElementById('error-state').classList.remove('hidden');
+                        alert("CẢNH BÁO: Đơn hàng bạn đang làm việc vừa bị xóa bởi một người khác!");
+                    }
+                })
+                .subscribe();
+        }
+
 
         async function handlePdfExport() {
             const printableArea = document.getElementById('printable-area');
