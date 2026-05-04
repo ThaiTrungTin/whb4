@@ -2369,6 +2369,12 @@ export async function executeSaveOrderJob(payload) {
     try {
         const { error } = await sb.from('don_hang').update({ [field]: value }).eq('ma_kho', ma_kho);
         if (error) throw error;
+
+        if (field === 'ma_nx') {
+            const { error: chiTietError } = await sb.from('chi_tiet').update({ ma_nx: value }).eq('ma_kho', ma_kho);
+            if (chiTietError) console.error("Lỗi cập nhật mã nx trong chi tiết:", chiTietError);
+        }
+
         dh[field] = value;
         showToast(`Đã cập nhật ${field === 'ma_nx' ? 'Mã NX' : 'Ghi chú'} cho đơn ${ma_kho}`, 'success');
         renderDonHangTable(cache.donHangList);
@@ -2390,7 +2396,10 @@ function enterInlineEditMode(cell) {
     
     let inputHtml = '';
     if (field === 'ma_nx') {
-        inputHtml = `<input type="text" class="w-full p-2 border-2 border-blue-400 rounded text-center font-bold text-sm" value="${currentValue || ''}">`;
+        inputHtml = `
+            <input type="text" class="w-full p-2 border-2 border-blue-400 rounded text-center font-bold text-sm inline-ma-nx-input" value="${currentValue || ''}">
+            <div class="inline-ma-nx-status text-xs mt-1 h-4 font-medium text-center"></div>
+        `;
     } else {
         inputHtml = `<textarea class="w-full p-2 border-2 border-blue-400 rounded text-sm" rows="4">${currentValue || ''}</textarea>`;
     }
@@ -2438,6 +2447,48 @@ function enterInlineEditMode(cell) {
                 this.setSelectionRange(newPos, newPos + 3);
             }
         });
+    } else if (field === 'ma_nx') {
+        const statusEl = cell.querySelector('.inline-ma-nx-status');
+        
+        const fetchSuggestion = debounce(async (val) => {
+            if (!val || !val.endsWith('-')) {
+                statusEl.textContent = '';
+                input.dataset.suggestion = '';
+                return;
+            }
+            statusEl.textContent = 'Đang tìm gợi ý...';
+            statusEl.className = 'inline-ma-nx-status text-xs mt-1 h-4 font-medium text-center text-gray-500';
+            const suggestion = await fetchNextMaNxSuggestion(val);
+            input.dataset.suggestion = suggestion || '';
+            if (suggestion) {
+                statusEl.textContent = `Gợi ý: ${suggestion} (Enter để điền)`;
+                statusEl.className = 'inline-ma-nx-status text-xs mt-1 h-4 font-medium text-center text-orange-600';
+            } else {
+                statusEl.textContent = '';
+            }
+        }, 300);
+
+        input.addEventListener('input', (e) => {
+            fetchSuggestion(e.target.value);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const suggestion = e.target.dataset.suggestion;
+                if (suggestion && e.target.value.endsWith('-')) {
+                    e.preventDefault();
+                    e.target.value = suggestion;
+                    statusEl.textContent = 'Đã điền gợi ý';
+                    statusEl.className = 'inline-ma-nx-status text-xs mt-1 h-4 font-medium text-center text-green-600';
+                    input.dataset.suggestion = '';
+                } else if (!e.shiftKey) {
+                    e.preventDefault();
+                    cell.querySelector('.save-inline-btn').click();
+                }
+            }
+        });
+        
+        fetchSuggestion(input.value);
     }
 
     input.focus();
