@@ -149,7 +149,10 @@ async function handleExcelExport() {
         showLoading(true);
         try {
             const query = exportAll ? sb.from('chi_tiet').select('*') : buildChiTietQuery().select('*');
-            const { data, error } = await query.order('thoi_gian', { ascending: false }).limit(50000);
+            const { data, error } = await query.order('thoi_gian', { ascending: true })
+                                               .order('ma_kho', { ascending: true })
+                                               .order('stt', { ascending: true })
+                                               .limit(50000);
             
             if (error) throw error;
             if (!data || data.length === 0) {
@@ -157,10 +160,83 @@ async function handleExcelExport() {
                 return;
             }
 
-            const worksheet = XLSX.utils.json_to_sheet(data);
+            // --- NÂNG CẤP: Định dạng cột và sắp xếp thứ tự các cột theo yêu cầu ---
+            const formattedData = data.map((item, index) => {
+                const maNx = item.ma_nx || '';
+                const loai = item.loai || '';
+                const nhapVal = parseFloat(item.nhap) || 0;
+                const xuatVal = parseFloat(item.xuat) || 0;
+
+                let maNhap = '';
+                let maXuat = '';
+
+                if (maNx.includes('RO')) {
+                    maNhap = maNx;
+                } else if (maNx.includes('DO')) {
+                    maXuat = maNx;
+                } else if (loai === 'Nhập') {
+                    maNhap = maNx;
+                } else if (loai === 'Xuất') {
+                    maXuat = maNx;
+                } else if (nhapVal > 0) {
+                    maNhap = maNx;
+                } else if (xuatVal > 0) {
+                    maXuat = maNx;
+                }
+                
+                return {
+                    id: item.id,
+                    thoi_gian: formatDateToDDMMYYYY(item.thoi_gian),
+                    ma_kho: item.ma_kho,
+                    ma_nx: maNx,
+                    ma_nhap: maNhap,
+                    ma_xuat: maXuat,
+                    ma_vach: item.ma_vach,
+                    ma_vt: item.ma_vt,
+                    ten_vt: item.ten_vt,
+                    lot: item.lot,
+                    date: item.date,
+                    yc_sl: item.yc_sl,
+                    nhap: item.nhap,
+                    xuat: item.xuat,
+                    loai: loai,
+                    yeu_cau: item.yeu_cau,
+                    muc_dich: item.muc_dich,
+                    nganh: item.nganh,
+                    stt: item.stt || (index + 1)
+                };
+            });
+
+            // --- NÂNG CẤP: Làm nổi bật các tiêu đề cột (Viết hoa các cột quan trọng) ---
+            const boldColumns = ['thoi_gian', 'ma_nx', 'ma_nhap', 'ma_xuat', 'ma_vt', 'lot', 'date', 'nhap', 'xuat', 'yeu_cau', 'muc_dich'];
+            const headerKeys = Object.keys(formattedData[0]);
+            const headers = headerKeys.map(k => boldColumns.includes(k) ? k.toUpperCase() : k);
+            const dataRows = formattedData.map(item => headerKeys.map(k => item[k]));
+
+            const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "ChiTiet");
-            XLSX.writeFile(workbook, `ChiTietGiaoDich_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            // --- NÂNG CẤP: Tên file tối giản (không có tiêu đề cột) ---
+            let filename = `ChiTiet_${new Date().toISOString().slice(0, 10)}`;
+            if (!exportAll) {
+                const state = viewStates['view-chi-tiet'];
+                const f = state.filters;
+                let suffix = "";
+                if (state.searchTerm) suffix += `_${state.searchTerm}`;
+                if (f.from_date) suffix += `_${f.from_date}`;
+                if (f.to_date) suffix += `_${f.to_date}`;
+                
+                ['loai', 'ma_kho', 'ma_nx', 'ma_vt', 'lot', 'nganh', 'yeu_cau'].forEach(k => {
+                    if (f[k] && f[k].length > 0) {
+                        suffix += `_${f[k].join('-')}`;
+                    }
+                });
+                if (suffix) filename += suffix.substring(0, 150);
+            }
+            
+            const safeFilename = filename.replace(/[^a-z0-9àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ\s\-_]/gi, '_');
+            XLSX.writeFile(workbook, `${safeFilename.xlsx ? safeFilename : safeFilename + '.xlsx'}`);
             showToast("Xuất Excel thành công!", 'success');
         } catch (err) {
             showToast(`Lỗi khi xuất Excel: ${err.message}`, 'error');
