@@ -13,6 +13,15 @@ let saveDonHangBtn, saveAndPrintBtn;
 let currentPrintChoiceMaKho = null;
 export let isNhapTraMode = false;
 let unreturnedMaNxCache = null;
+let trayListCache = null;
+
+async function getTrayList() {
+    if (trayListCache) return trayListCache;
+    const { data } = await sb.from('ton_kho').select('tray').not('tray', 'is', null).neq('tray', '');
+    const unique = [...new Set((data || []).map(r => r.tray).filter(Boolean))].sort();
+    trayListCache = unique.map(t => ({ tray: t }));
+    return trayListCache;
+}
 
 async function getUnreturnedMaNxList() {
     if (unreturnedMaNxCache) return unreturnedMaNxCache;
@@ -701,7 +710,6 @@ function renderChiTietTable() {
             projectedStockText = `Sau Xuất: <span class="font-bold ${projectedStock < 0 ? 'text-red-600' : 'text-green-600'}">${projectedStock.toLocaleString()}</span>${star}`;
         }
 
-        const trayInfo = item.tonKhoData ? `Tray: <span class="font-bold text-indigo-600">${item.tonKhoData.tray || '?'}</span>` : '';
         const pendingNhap = item.pendingData?.nhap || 0;
         const pendingXuat = item.pendingData?.xuat || 0;
         const pendingInfo = ` | <span class="text-yellow-600 font-bold">Chờ Nhập: ${pendingNhap.toLocaleString()}</span> | <span class="text-yellow-600 font-bold">Chờ Xuất: ${pendingXuat.toLocaleString()}</span>`;
@@ -721,6 +729,12 @@ function renderChiTietTable() {
             }
         }
 
+        const isNhapMode = loaiDon === 'Nhap';
+        const trayValue = item.tray !== undefined ? item.tray : (item.tonKhoData?.tray || '');
+        const trayInfo = (isNhapMode && !isViewMode)
+            ? `<label class="text-xs text-gray-500 mr-1">Tray:</label><input type="text" value="${trayValue}" placeholder="Nhập tray..." class="chi-tiet-tray-input border rounded px-1 py-0.5 text-xs w-20 text-indigo-700 font-bold" data-id="${item.id}">`
+            : `Tray: <span class="font-bold text-indigo-600">${trayValue || '?'}</span>`;
+
         return `
             <tr data-id="${item.id}" class="chi-tiet-row group">
                 <td class="p-1 border text-center align-top ${isViewMode || isNhapTraMode ? '' : 'drag-handle cursor-move'}">${index + 1}</td>
@@ -730,7 +744,7 @@ function renderChiTietTable() {
                 <td class="p-1 border align-top break-words">${item.ten_vt || ''}</td>
                 <td class="p-1 border align-top">
                     <div class="relative">
-                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Chọn LOT..." ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
+                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Ch\u1ecdn LOT..." ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                         <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
@@ -745,9 +759,9 @@ function renderChiTietTable() {
                 </td>
                 <td class="p-1 border align-top chi-tiet-loai-cell">
                     <select class="w-full p-1 border rounded chi-tiet-input" data-field="loai" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
-                        <option value="" disabled ${!item.loai ? 'selected' : ''}>-- Chọn --</option>
-                        <option value="Tiêu Hao" ${item.loai === 'Tiêu Hao' ? 'selected' : ''}>Tiêu Hao</option>
-                        <option value="Trưng Bày" ${item.loai === 'Trưng Bày' ? 'selected' : ''}>Trưng Bày</option>
+                        <option value="" disabled ${!item.loai ? 'selected' : ''}>-- Ch\u1ecdn --</option>
+                        <option value="Ti\u00eau Hao" ${item.loai === 'Ti\u00eau Hao' ? 'selected' : ''}>Ti\u00eau Hao</option>
+                        <option value="Tr\u01b0ng B\u00e0y" ${item.loai === 'Tr\u01b0ng B\u00e0y' ? 'selected' : ''}>Tr\u01b0ng B\u00e0y</option>
                     </select>
                 </td>
                 <td class="p-1 border align-top text-center font-mono ${barcodeColorClass}">${generatedBarcode || ''}</td>
@@ -761,8 +775,8 @@ function renderChiTietTable() {
                         <div>
                             <span class="font-semibold">${tonKhoInfo}</span>${pendingInfo} | <span class="font-semibold">${projectedStockText}</span>
                         </div>
-                        <div>
-                            <span class="font-semibold">${trayInfo}</span>
+                        <div class="flex items-center gap-1">
+                            ${trayInfo}
                         </div>
                     </div>
                 </td>
@@ -1804,6 +1818,33 @@ async function handleSaveDonHang(e, printAction = null) {
 
         await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
 
+        // Nếu là đơn Nhập/Nhập Trả: cập nhật Tray vào tồn kho theo ma_vach
+        // Đọc thẳng từ DOM để lấy cả giá trị tray đã có sẵn (không chỉ những ô người dùng vừa đổi)
+        if (loai_don === 'Nhap') {
+            const trayInputEls = document.querySelectorAll('.chi-tiet-tray-input');
+            const trayMap = new Map();
+            trayInputEls.forEach(el => {
+                const itemId = el.dataset.id;
+                const trayVal = el.value.trim();
+                if (trayVal) trayMap.set(itemId, trayVal);
+            });
+
+            if (trayMap.size > 0) {
+                const trayPromises = [];
+                chiTietItems.forEach(item => {
+                    if (!item || !item.ma_vach) return;
+                    const trayVal = trayMap.get(String(item.id));
+                    if (trayVal !== undefined) {
+                        // Lưu vào bảng thật ton_kho theo ma_vach (Code + Lot + EXP)
+                        trayPromises.push(
+                            sb.from('ton_kho').update({ tray: trayVal }).eq('ma_vach', item.ma_vach)
+                        );
+                    }
+                });
+                if (trayPromises.length > 0) await Promise.all(trayPromises);
+            }
+        }
+
         showToast('Lưu đơn hàng thành công!', 'success');
         
         if (printAction === 'print') {
@@ -2469,13 +2510,88 @@ export function initDonHangView() {
             await handleMaVtAutocomplete(input);
         }
     }, 300));
-    
+
+    chiTietBody.addEventListener('mousedown', async (e) => {
+        const input = e.target;
+        if (input.classList.contains('chi-tiet-tray-input')) {
+            // Ngăn chặn sự kiện click lan lên document làm đóng popover vừa mở
+            e.stopPropagation();
+            
+            const list = await getTrayList();
+            const inputVal = input.value.toLowerCase();
+            const suggestions = list.filter(t => t.tray.toLowerCase().includes(inputVal));
+            
+            if (suggestions.length) {
+                openAutocomplete(input, suggestions, {
+                    valueKey: 'tray',
+                    primaryTextKey: 'tray',
+                    width: `${Math.max(input.offsetWidth, 150)}px`,
+                    // Thiết lập chiều cao để hiển thị tầm 5 mục và cho phép cuộn
+                    customStyles: {
+                        maxHeight: '180px', 
+                        overflowY: 'auto'
+                    },
+                    onSelect: (val) => {
+                        input.value = val;
+                        const itemId = input.dataset.id;
+                        const item = chiTietItems.find(i => i && String(i.id) === String(itemId));
+                        if (item) item.tray = val;
+                    }
+                });
+            }
+        }
+    });
+
     chiTietBody.addEventListener('focusin', async (e) => {
         const input = e.target;
         if (input.classList.contains('chi-tiet-input') && input.dataset.field === 'ma_vt') {
             await handleMaVtAutocomplete(input);
         }
+        // Chúng ta đã dùng mousedown cho tray để nhạy hơn, nhưng vẫn giữ focusin đề phòng dùng phím Tab
+        if (input.classList.contains('chi-tiet-tray-input')) {
+            const list = await getTrayList();
+            const inputVal = input.value.toLowerCase();
+            const suggestions = list.filter(t => t.tray.toLowerCase().includes(inputVal));
+            if (suggestions.length) {
+                openAutocomplete(input, suggestions, {
+                    valueKey: 'tray',
+                    primaryTextKey: 'tray',
+                    width: `${Math.max(input.offsetWidth, 150)}px`,
+                    customStyles: { maxHeight: '180px', overflowY: 'auto' },
+                    onSelect: (val) => {
+                        input.value = val;
+                        const itemId = input.dataset.id;
+                        const item = chiTietItems.find(i => i && String(i.id) === String(itemId));
+                        if (item) item.tray = val;
+                    }
+                });
+            }
+        }
     });
+
+    chiTietBody.addEventListener('input', debounce(async (e) => {
+        const input = e.target;
+        if (input.classList.contains('chi-tiet-tray-input')) {
+            const list = await getTrayList();
+            const inputVal = input.value.toLowerCase();
+            const suggestions = list.filter(t => t.tray.toLowerCase().includes(inputVal));
+            openAutocomplete(input, suggestions, {
+                valueKey: 'tray',
+                primaryTextKey: 'tray',
+                width: `${Math.max(input.offsetWidth, 150)}px`,
+                customStyles: { maxHeight: '180px', overflowY: 'auto' },
+                onSelect: (val) => {
+                    input.value = val;
+                    const itemId = input.dataset.id;
+                    const item = chiTietItems.find(i => i && String(i.id) === String(itemId));
+                    if (item) item.tray = val;
+                }
+            });
+        }
+        if (input.classList.contains('chi-tiet-input') && input.dataset.field === 'ma_vt') {
+            await handleMaVtAutocomplete(input);
+        }
+    }, 250));
 
     chiTietBody.addEventListener('keydown', handleSmartTabNavigation);
 

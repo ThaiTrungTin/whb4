@@ -339,10 +339,21 @@ export function openAutocomplete(inputElement, suggestions, config) {
         `;
     }).join('');
 
+    if (config.customStyles) {
+        Object.assign(optionsList.style, config.customStyles);
+    }
+
     inputElement.parentNode.appendChild(popover);
+    popover.style.top = `${inputElement.offsetTop + inputElement.offsetHeight}px`;
+    popover.style.left = `${inputElement.offsetLeft}px`;
     popover.style.minWidth = `${inputElement.offsetWidth}px`;
     popover.style.width = 'max-content';
     popover.style.maxWidth = '400px'; 
+    
+    // Đảm bảo parent có position: relative để popover định vị đúng
+    if (window.getComputedStyle(inputElement.parentNode).position === 'static') {
+        inputElement.parentNode.style.position = 'relative';
+    } 
     
     optionsList.addEventListener('mousedown', (e) => { 
         const option = e.target.closest('.autocomplete-option');
