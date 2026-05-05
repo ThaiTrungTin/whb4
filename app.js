@@ -322,6 +322,13 @@ export function openAutocomplete(inputElement, suggestions, config) {
     // NÂNG CẤP: Hỗ trợ config.itemClass để gán màu sắc/style cho từng mục gợi ý
     optionsList.innerHTML = suggestions.map(item => {
         const itemExtraClass = config.itemClass ? config.itemClass(item) : '';
+        if (config.customHtml) {
+            return `
+                <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 autocomplete-option ${itemExtraClass}" data-value="${item[config.valueKey]}">
+                    ${config.customHtml(item)}
+                </div>
+            `;
+        }
         return `
             <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 autocomplete-option ${itemExtraClass}" data-value="${item[config.valueKey]}">
                 <div class="flex justify-between items-center pointer-events-none gap-4">

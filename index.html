@@ -838,6 +838,9 @@
                                         <button id="don-hang-btn-add"
                                             class="dh-admin-only bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">+
                                             Thêm</button>
+                                        <button id="don-hang-btn-nhap-tra"
+                                            class="dh-admin-only bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">
+                                            Nhập Trả</button>
                                         <button id="don-hang-btn-edit"
                                             class="dh-admin-only bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md"
                                             disabled>Sửa</button>
@@ -1428,7 +1431,7 @@
                                     class="mt-1 block w-full p-2 border rounded-md">
                             </div>
                             <div class="col-span-6 sm:col-span-2">
-                                <label class="block text-sm font-medium">Loại Đơn <span
+                                <label id="don-hang-modal-loai-don-label" class="block text-sm font-medium">Loại Đơn <span
                                         class="text-red-500 font-bold">*</span></label>
                                 <select id="don-hang-modal-loai-don" required
                                     class="mt-1 block w-full p-2 border rounded-md">
@@ -1436,6 +1439,7 @@
                                     <option value="Nhap">Nhập</option>
                                     <option value="Xuat">Xuất</option>
                                 </select>
+                                <input type="text" id="don-hang-modal-ma-nx-old" class="mt-1 w-full p-2 border rounded-md hidden" placeholder="Tìm mã..." autocomplete="off">
                             </div>
                             <div class="col-span-6 sm:col-span-2">
                                 <label class="block text-sm font-medium">Yêu Cầu <span

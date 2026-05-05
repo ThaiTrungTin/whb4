@@ -11,6 +11,58 @@ let chiTietSortable = null;
 let activeLotPopover = null;
 let saveDonHangBtn, saveAndPrintBtn;
 let currentPrintChoiceMaKho = null;
+export let isNhapTraMode = false;
+let unreturnedMaNxCache = null;
+
+async function getUnreturnedMaNxList() {
+    if (unreturnedMaNxCache) return unreturnedMaNxCache;
+    showLoading(true);
+    try {
+        const { data: returnChiTietNotes } = await sb.from('chi_tiet').select('muc_dich').gt('nhap', 0);
+        const { data: returnDonHangNotes } = await sb.from('don_hang').select('ghi_chu, muc_dich').ilike('ma_kho', 'IN.%');
+        const allReturnStrings = [];
+        (returnChiTietNotes || []).forEach(n => { if (n.muc_dich) allReturnStrings.push(n.muc_dich.toLowerCase()); });
+        (returnDonHangNotes || []).forEach(n => {
+            if (n.muc_dich) allReturnStrings.push(n.muc_dich.toLowerCase());
+            if (n.ghi_chu) allReturnStrings.push(n.ghi_chu.toLowerCase());
+        });
+
+        const { data: displayExports } = await sb.from('chi_tiet')
+            .select('ma_kho, ma_nx, muc_dich, yeu_cau, nganh, thoi_gian')
+            .gt('xuat', 0)
+            .eq('loai', 'Trưng Bày');
+            
+        const unreturnedItems = (displayExports||[]).filter(exportItem => {
+            if (!exportItem.ma_nx) return false;
+            const maNxToSearch = exportItem.ma_nx.trim().toLowerCase();
+            const isReturned = allReturnStrings.some(returnString => returnString.includes(maNxToSearch));
+            return !isReturned;
+        });
+        
+        const uniqueMap = new Map();
+        unreturnedItems.forEach(item => {
+            if (!uniqueMap.has(item.ma_nx)) {
+                uniqueMap.set(item.ma_nx, {
+                    ma_nx: item.ma_nx,
+                    muc_dich: item.muc_dich,
+                    yeu_cau: item.yeu_cau,
+                    nganh: item.nganh,
+                    ma_kho: item.ma_kho,
+                    thoi_gian: item.thoi_gian,
+                    display_text: `${item.muc_dich || ''} - Yêu cầu: ${item.yeu_cau || ''}`
+                });
+            }
+        });
+        unreturnedMaNxCache = Array.from(uniqueMap.values());
+        unreturnedMaNxCache.sort((a, b) => new Date(b.thoi_gian || 0) - new Date(a.thoi_gian || 0));
+        return unreturnedMaNxCache;
+    } catch(e) {
+        console.error("Error getUnreturnedMaNxList", e);
+        return [];
+    } finally {
+        showLoading(false);
+    }
+}
 
 // Helper function to safely get an element's value
 const getElValue = (id, trim = false) => {
@@ -671,14 +723,14 @@ function renderChiTietTable() {
 
         return `
             <tr data-id="${item.id}" class="chi-tiet-row group">
-                <td class="p-1 border text-center align-top ${isViewMode ? '' : 'drag-handle cursor-move'}">${index + 1}</td>
+                <td class="p-1 border text-center align-top ${isViewMode || isNhapTraMode ? '' : 'drag-handle cursor-move'}">${index + 1}</td>
                 <td class="p-1 border align-top relative">
-                    <input type="text" value="${item.ma_vt || ''}" class="w-full p-1 border rounded chi-tiet-input" data-field="ma_vt" data-col="ma_vt" autocomplete="off" ${isViewMode ? 'disabled' : ''}>
+                    <input type="text" value="${item.ma_vt || ''}" class="w-full p-1 border rounded chi-tiet-input" data-field="ma_vt" data-col="ma_vt" autocomplete="off" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top break-words">${item.ten_vt || ''}</td>
                 <td class="p-1 border align-top">
                     <div class="relative">
-                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Chọn LOT..." ${isViewMode ? 'disabled' : ''}>
+                        <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Chọn LOT..." ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                         <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
@@ -686,13 +738,13 @@ function renderChiTietTable() {
                 </td>
                 <td class="p-1 border align-top text-center">${item.date || ''}</td>
                 <td class="p-1 border align-top">
-                    <input type="number" value="${item.yc_sl || ''}" min="1" class="w-full p-1 border rounded chi-tiet-input" data-field="yc_sl" data-col="yc_sl" ${isViewMode ? 'disabled' : ''}>
+                    <input type="number" value="${item.yc_sl || ''}" min="1" class="w-full p-1 border rounded chi-tiet-input" data-field="yc_sl" data-col="yc_sl" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top">
                     <input type="number" value="${(item.sl === null || item.sl === undefined) ? '' : item.sl}" min="0" class="w-full p-1 border rounded chi-tiet-input ${slColorClass}" data-field="sl" data-col="sl" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top chi-tiet-loai-cell">
-                    <select class="w-full p-1 border rounded chi-tiet-input" data-field="loai" ${isViewMode ? 'disabled' : ''}>
+                    <select class="w-full p-1 border rounded chi-tiet-input" data-field="loai" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                         <option value="" disabled ${!item.loai ? 'selected' : ''}>-- Chọn --</option>
                         <option value="Tiêu Hao" ${item.loai === 'Tiêu Hao' ? 'selected' : ''}>Tiêu Hao</option>
                         <option value="Trưng Bày" ${item.loai === 'Trưng Bày' ? 'selected' : ''}>Trưng Bày</option>
@@ -700,7 +752,7 @@ function renderChiTietTable() {
                 </td>
                 <td class="p-1 border align-top text-center font-mono ${barcodeColorClass}">${generatedBarcode || ''}</td>
                 <td class="p-1 border text-center align-top">
-                    ${!isViewMode ? `<button type="button" class="text-red-500 hover:text-red-700 chi-tiet-delete-btn text-xl font-bold">&times;</button>` : ''}
+                    ${!isViewMode && !isNhapTraMode ? `<button type="button" class="text-red-500 hover:text-red-700 chi-tiet-delete-btn text-xl font-bold">&times;</button>` : ''}
                 </td>
             </tr>
             <tr data-info-id="${item.id}" class="bg-blue-50">
@@ -1185,6 +1237,7 @@ function handleFileSelection(files) {
 }
 
 export async function openDonHangModal(dh = null, mode = 'add') {
+    isNhapTraMode = mode === 'nhap-tra';
     const modal = document.getElementById('don-hang-modal');
     const form = document.getElementById('don-hang-form');
     form.reset();
@@ -1209,7 +1262,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     maNxInput.disabled = false;
 
     document.getElementById('don-hang-file-drop-area').style.display = isViewMode ? 'none' : 'flex';
-    document.getElementById('don-hang-them-vat-tu-btn').classList.toggle('hidden', !isEditOrAdd || !(currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User'));
+    document.getElementById('don-hang-them-vat-tu-btn').classList.toggle('hidden', isViewMode || isNhapTraMode || !(currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User'));
 
     saveDonHangBtn = document.getElementById('save-don-hang-btn');
     saveAndPrintBtn = document.getElementById('save-and-print-btn');
@@ -1295,14 +1348,15 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     yeuCauInput.addEventListener('input', debounce(handleYeuCauAutocomplete, 200));
     yeuCauInput.addEventListener('keydown', handleSmartTabNavigation);
 
-    if (mode === 'add') {
-        document.getElementById('don-hang-modal-title').textContent = 'Thêm Đơn Hàng Mới';
+    if (mode === 'add' || isNhapTraMode) {
+        document.getElementById('don-hang-modal-title').textContent = isNhapTraMode ? 'Nhập Trả Hàng Trưng Bày' : 'Thêm Đơn Hàng Mới';
         document.getElementById('don-hang-edit-mode-ma-kho').value = '';
         maKhoInput.readOnly = true;
 
         const today = new Date();
         document.getElementById('don-hang-modal-thoi-gian').valueAsDate = today;
-        document.getElementById('don-hang-modal-loai-don').value = ''; 
+        document.getElementById('don-hang-modal-loai-don').value = isNhapTraMode ? 'Nhap' : ''; 
+        if (isNhapTraMode) document.getElementById('don-hang-modal-loai-don').disabled = true;
         updateGeneratedCodes();
         
         initialDonHangData = {
@@ -1316,10 +1370,128 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         };
         initialChiTietItems = [];
 
+        // UI changes for Nhập Trả Mode
+        const loaiDonLabel = document.getElementById('don-hang-modal-loai-don-label');
+        const loaiDonSelect = document.getElementById('don-hang-modal-loai-don');
+        const maNxOldInput = document.getElementById('don-hang-modal-ma-nx-old');
+
+        if (maNxOldInput._nhapTraFocus) {
+            maNxOldInput.removeEventListener('focus', maNxOldInput._nhapTraFocus);
+            maNxOldInput.removeEventListener('input', maNxOldInput._nhapTraInput);
+        }
+        
+        if (isNhapTraMode) {
+            loaiDonLabel.innerHTML = 'Mã Xuất Cũ <span class="text-red-500 font-bold">*</span>';
+            loaiDonSelect.classList.add('hidden');
+            maNxOldInput.classList.remove('hidden');
+            maNxOldInput.value = '';
+            maNxOldInput.disabled = false;
+            maNxInput.placeholder = ""; // Normal ma_nx input
+
+            unreturnedMaNxCache = null; // force refresh
+            const handleMaNxAutocomplete = async () => {
+                const inputValue = maNxOldInput.value.trim().toLowerCase();
+                if (!inputValue) {
+                    document.getElementById('don-hang-modal-yeu-cau').value = '';
+                    document.getElementById('don-hang-modal-nganh').value = '';
+                    document.getElementById('don-hang-modal-muc-dich').value = '';
+                    chiTietItems = [];
+                    renderChiTietTable();
+                    updateGeneratedCodes();
+                }
+                
+                const list = await getUnreturnedMaNxList();
+                const suggestions = list.filter(i => i.ma_nx.toLowerCase().includes(inputValue) || (i.muc_dich || '').toLowerCase().includes(inputValue) || (i.yeu_cau || '').toLowerCase().includes(inputValue));
+                
+                openAutocomplete(maNxOldInput, suggestions, {
+                    valueKey: 'ma_nx',
+                    customHtml: (item) => `
+                        <div class="flex flex-col pointer-events-none">
+                            <p class="text-sm font-medium text-gray-900">${item.ma_nx}</p>
+                            <p class="text-xs text-gray-500 mt-1">${item.muc_dich || ''}</p>
+                            <p class="text-xs text-blue-600 mt-0.5 italic">Yêu cầu: ${item.yeu_cau || ''}</p>
+                        </div>
+                    `,
+                    width: `350px`,
+                    onSelect: async (selectedValue) => {
+                        const selectedItem = list.find(i => i.ma_nx === selectedValue);
+                        if (selectedItem) {
+                            maNxOldInput.value = selectedItem.ma_nx; // fill visually
+                            document.getElementById('don-hang-modal-yeu-cau').value = selectedItem.yeu_cau || '';
+                            document.getElementById('don-hang-modal-nganh').value = selectedItem.nganh || '';
+                            document.getElementById('don-hang-modal-muc-dich').value = `Nhập trả từ ${selectedItem.ma_nx} - ${selectedItem.muc_dich || ''}`;
+                            
+                            showLoading(true);
+                            try {
+                                const { data: ctData } = await sb.from('chi_tiet').select('*').eq('ma_kho', selectedItem.ma_kho).eq('loai', 'Trưng Bày');
+                                chiTietItems = [];
+                                
+                                for (const ct of (ctData || [])) {
+                                    const newItem = {
+                                        id: `new-${Date.now()}-${Math.random()}`,
+                                        ma_vt: ct.ma_vt,
+                                        ten_vt: ct.ten_vt,
+                                        ma_vach: ct.ma_vach,
+                                        lot: ct.lot,
+                                        date: ct.date,
+                                        yc_sl: ct.xuat, 
+                                        sl: 0, 
+                                        loai: 'Trưng Bày',
+                                        pendingData: { nhap: 0, xuat: 0 },
+                                        ma_vach_valid: true
+                                    };
+                                    const { data: tonKhoData } = await sb.from('ton_kho_update').select('*').eq('ma_vach', ct.ma_vach).single();
+                                    if (tonKhoData) {
+                                        newItem.tonKhoData = tonKhoData;
+                                        newItem.lotOptions = [tonKhoData];
+                                        newItem.nganh = tonKhoData.nganh;
+                                        newItem.phu_trach = tonKhoData.phu_trach;
+                                    }
+                                    chiTietItems.push(newItem);
+                                }
+                                updateGeneratedCodes();
+                                renderChiTietTable();
+                            } finally {
+                                showLoading(false);
+                            }
+                        }
+                    }
+                });
+            };
+            maNxOldInput._nhapTraFocus = handleMaNxAutocomplete;
+            maNxOldInput._nhapTraInput = debounce(handleMaNxAutocomplete, 200);
+            maNxOldInput.addEventListener('focus', maNxOldInput._nhapTraFocus);
+            maNxOldInput.addEventListener('keydown', handleSmartTabNavigation);
+            maNxOldInput.addEventListener('input', (e) => {
+                if (!e.target.value.trim()) {
+                    document.getElementById('don-hang-modal-yeu-cau').value = '';
+                    document.getElementById('don-hang-modal-nganh').value = '';
+                    document.getElementById('don-hang-modal-muc-dich').value = '';
+                    chiTietItems = [];
+                    renderChiTietTable();
+                    updateGeneratedCodes();
+                }
+                maNxOldInput._nhapTraInput(e);
+            });
+        } else {
+            loaiDonLabel.innerHTML = 'Loại Đơn <span class="text-red-500 font-bold">*</span>';
+            loaiDonSelect.classList.remove('hidden');
+            maNxOldInput.classList.add('hidden');
+            maNxInput.placeholder = "";
+        }
+
     } else {
         document.getElementById('don-hang-modal-title').textContent = isViewMode ? 'Xem Chi Tiết Đơn Hàng' : 'Sửa Đơn Hàng';
         document.getElementById('don-hang-edit-mode-ma-kho').value = dh.ma_kho;
         maKhoInput.readOnly = true;
+        
+        const loaiDonLabel = document.getElementById('don-hang-modal-loai-don-label');
+        const loaiDonSelect = document.getElementById('don-hang-modal-loai-don');
+        const maNxOldInput = document.getElementById('don-hang-modal-ma-nx-old');
+        loaiDonLabel.innerHTML = 'Loại Đơn <span class="text-red-500 font-bold">*</span>';
+        loaiDonSelect.classList.remove('hidden');
+        maNxOldInput.classList.add('hidden');
+        maNxInput.placeholder = "";
         
         Object.keys(dh).forEach(key => {
             const input = document.getElementById(`don-hang-modal-${key.replace(/_/g, '-')}`);
@@ -1545,6 +1717,14 @@ async function handleSaveDonHang(e, printAction = null) {
     if (chiTietItems.filter(Boolean).length === 0) {
         showToast('Phải có ít nhất một vật tư trong đơn hàng.', 'error');
         return;
+    }
+
+    if (isNhapTraMode) {
+        const hasMismatch = chiTietItems.some(item => parseFloat(item.sl) !== parseFloat(item.yc_sl));
+        if (hasMismatch) {
+            showToast('Số lượng thực nhập (SL) phải bằng Yêu Cầu (Y/c) đối với đơn Nhập Trả.', 'error');
+            return;
+        }
     }
 
     if (!navigator.onLine) {
@@ -1880,6 +2060,7 @@ export function initDonHangView() {
     });
     
     document.getElementById('don-hang-btn-add').addEventListener('click', () => openDonHangModal(null, 'add'));
+    document.getElementById('don-hang-btn-nhap-tra').addEventListener('click', () => openDonHangModal(null, 'nhap-tra'));
     document.getElementById('don-hang-btn-edit').addEventListener('click', () => {
         const ma_kho = [...viewStates['view-don-hang'].selected][0];
         const optimisticData = cache.donHangList.find(dh => dh.ma_kho === ma_kho);
@@ -1960,6 +2141,8 @@ export function initDonHangView() {
     const ghiChuInput = document.getElementById('don-hang-modal-ghi-chu');
     if (ghiChuInput) {
         ghiChuInput.addEventListener('focus', function() {
+            const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+            if (loaiDon === 'Nhap') return;
             if (!this.value.trim()) {
                 this.value = 'Số Lượng :  ... Kiện';
                 // Đưa cursor về trước dấu ...
@@ -1971,6 +2154,8 @@ export function initDonHangView() {
         });
 
         ghiChuInput.addEventListener('keydown', function(e) {
+            const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+            if (loaiDon === 'Nhap') return;
             if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
                 const start = this.selectionStart;
@@ -2426,6 +2611,7 @@ function enterInlineEditMode(cell) {
     // NÂNG CẤP: Logic thông minh cho Ghi chú (giống trong form)
     if (field === 'ghi_chu') {
         input.addEventListener('focus', function() {
+            if (dh && dh.loai_don === 'Nhap') return;
             if (!this.value.trim()) {
                 this.value = 'Số Lượng :  ... Kiện';
                 const pos = 13;
@@ -2434,6 +2620,7 @@ function enterInlineEditMode(cell) {
         });
 
         input.addEventListener('keydown', function(e) {
+            if (dh && dh.loai_don === 'Nhap') return;
             if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
                 const start = this.selectionStart;
