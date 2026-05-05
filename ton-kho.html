@@ -13,6 +13,10 @@
                     <button id="ton-kho-toggle-available" data-stock-mode="available" class="px-4 py-1 rounded-full">Khả Dụng</button>
                     <button id="ton-kho-toggle-all" data-stock-mode="all" class="px-4 py-1 rounded-full">Tất Cả</button>
                 </div>
+                <div class="flex items-center gap-2 ml-2">
+                    <label for="ton-kho-date-to" class="text-sm font-bold text-gray-700 whitespace-nowrap">Tồn đến:</label>
+                    <input type="date" id="ton-kho-date-to" class="px-2 py-2 border rounded-md text-sm">
+                </div>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
                 <button id="ton-kho-reset-filters" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md">Xóa Lọc</button>
@@ -45,6 +49,10 @@
                 </th>
                 <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">
                     <div>Cuối<span id="ton-kho-header-cuoi-count" class="block font-bold text-red-600 text-xs"></span></div>
+                </th>
+                <th id="ton-kho-col-date-to-header" class="hidden px-1 py-3 text-center text-xs font-bold uppercase tracking-wider border border-gray-300 bg-gray-100" style="width: 5%;">
+                    <div class="text-black">Tồn đến <span id="ton-kho-header-date-to-text" class="block text-[10px] text-gray-500 font-normal"></span></div>
+                    <span id="ton-kho-header-date-to-count" class="block font-bold text-blue-600 text-xs mt-1"></span>
                 </th>
                 <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">T.Trạng</th>
                 <th class="px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 3%;">

@@ -170,6 +170,9 @@ function buildTonKhoQuery() {
     if (state.filters.nganh?.length > 0) query = query.in('nganh', state.filters.nganh);
     if (state.filters.phu_trach?.length > 0) query = query.in('phu_trach', state.filters.phu_trach);
     
+    // Nếu có ngày "Tồn đến", chúng ta không lọc query gốc tại đây vì cần lấy tồn hiện tại để tính toán ngược.
+    // Việc lọc theo ngày sẽ được xử lý trong fetchTonKho.
+
     return query;
 }
 
@@ -189,6 +192,18 @@ export async function fetchTonKho(page = viewStates['view-ton-kho'].currentPage,
 
         let query = buildTonKhoQuery().order('ma_vach', { ascending: true }).range(from, to);
 
+        let transData = [];
+        if (state.dateTo) {
+            // Lấy tất cả chi tiết giao dịch phát sinh SAU ngày T để tính ngược
+            // state.dateTo có định dạng YYYY-MM-DD
+            const { data: transactions, error: transError } = await sb
+                .from('chi_tiet')
+                .select('ma_vach, nhap, xuat, thoi_gian')
+                .gt('thoi_gian', state.dateTo + 'T23:59:59');
+            
+            if (!transError) transData = transactions;
+        }
+
         const [queryResult, _] = await Promise.all([
             query,
             updateTonKhoHeaderCounts()
@@ -200,6 +215,23 @@ export async function fetchTonKho(page = viewStates['view-ton-kho'].currentPage,
             showToast("Không thể tải dữ liệu tồn kho.", 'error');
         } else {
             state.totalFilteredCount = count;
+            
+            // Tính toán tồn đến ngày nếu có yêu cầu
+            if (state.dateTo && data) {
+                const transMap = {};
+                transData.forEach(tr => {
+                    if (!transMap[tr.ma_vach]) transMap[tr.ma_vach] = { nhap: 0, xuat: 0 };
+                    transMap[tr.ma_vach].nhap += (tr.nhap || 0);
+                    transMap[tr.ma_vach].xuat += (tr.xuat || 0);
+                });
+
+                data.forEach(item => {
+                    const diff = transMap[item.ma_vach] || { nhap: 0, xuat: 0 };
+                    // Công thức: Tồn hiện tại - (Nhập sau T) + (Xuất sau T)
+                    item.ton_den_ngay = (item.ton_cuoi || 0) - diff.nhap + diff.xuat;
+                });
+            }
+
             cache.tonKhoList = data;
             
             renderTonKhoTable(data);
@@ -217,27 +249,74 @@ function renderTonKhoTable(data) {
     const tkTableBody = document.getElementById('ton-kho-table-body');
     if (!tkTableBody) return;
 
+    const state = viewStates['view-ton-kho'];
+    const hasDateTo = !!state.dateTo;
+    
+    // Cập nhật Header
+    const dateToHeader = document.getElementById('ton-kho-col-date-to-header');
+    const dateToHeaderText = document.getElementById('ton-kho-header-date-to-text');
+    const dateToHeaderCount = document.getElementById('ton-kho-header-date-to-count');
+    
+    if (dateToHeader && dateToHeaderText) {
+        dateToHeader.classList.toggle('hidden', !hasDateTo);
+        if (hasDateTo) {
+            const formattedDate = state.dateTo.split('-').reverse().join('/');
+            dateToHeaderText.textContent = `(${formattedDate})`;
+            
+            // Tính tổng SL tồn đến ngày (TOÀN BỘ KẾT QUẢ LỌC)
+            // Chúng ta sẽ lấy kết quả từ RPC chi tiết để tính phần chênh lệch
+            (async () => {
+                try {
+                    const { data: summaryData } = await sb.rpc('get_chi_tiet_summary', {
+                        _search_term: state.searchTerm || '',
+                        _from_date: state.dateTo + 'T23:59:59', // Các giao dịch SAU ngày T
+                        _to_date: null,
+                        _ma_kho_filter: [],
+                        _ma_nx_filter: [],
+                        _ma_vt_filter: state.filters.ma_vt || [],
+                        _lot_filter: state.filters.lot || [],
+                        _nganh_filter: state.filters.nganh || [],
+                        _phu_trach_filter: state.filters.phu_trach || [],
+                        _user_role: currentUser.phan_quyen,
+                        _user_ho_ten: currentUser.ho_ten
+                    });
+
+                    let totalAdjNhap = 0;
+                    let totalAdjXuat = 0;
+                    if (summaryData && summaryData.length > 0) {
+                        totalAdjNhap = summaryData[0].total_nhap || 0;
+                        totalAdjXuat = summaryData[0].total_xuat || 0;
+                    }
+
+                    // Lấy tổng tồn hiện tại từ Header (đã được fetch trong fetchTonKho)
+                    const cuoiText = document.getElementById('ton-kho-header-cuoi-count')?.textContent || '(0)';
+                    const totalCuoi = parseInt(cuoiText.replace(/[^\d]/g, ''), 10) || 0;
+                    
+                    const globalTotalTonDenNgay = totalCuoi - totalAdjNhap + totalAdjXuat;
+                    if (dateToHeaderCount) dateToHeaderCount.textContent = `(${(globalTotalTonDenNgay).toLocaleString()})`;
+                } catch (err) {
+                    console.error("Error calculating global ton_den_ngay:", err);
+                    if (dateToHeaderCount) dateToHeaderCount.textContent = '(lỗi)';
+                }
+            })();
+        } else {
+            if (dateToHeaderCount) dateToHeaderCount.textContent = '';
+        }
+    }
+
     if (data && data.length > 0) {
         const html = data.map(tk => {
-            const isSelected = viewStates['view-ton-kho'].selected.has(tk.ma_vach);
+            const isSelected = state.selected.has(tk.ma_vach);
             const tonCuoiClass = tk.ton_cuoi > 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold';
+            const tonDenNgayHtml = hasDateTo ? `<td class="px-2 py-2 text-sm border border-gray-300 text-center font-bold bg-blue-50 text-blue-800">${tk.ton_den_ngay ?? 0}</td>` : '';
             
             let tinhTrangClass = 'text-[10px] font-semibold px-1 py-0.5 rounded-full ';
             switch (tk.tinh_trang) {
-                case 'Hết hạn sử dụng':
-                    tinhTrangClass += 'text-red-800 bg-red-100';
-                    break;
-                case 'Cận date':
-                    tinhTrangClass += 'text-blue-800 bg-blue-100';
-                    break;
-                case 'Còn sử dụng':
-                    tinhTrangClass += 'text-green-800 bg-green-100';
-                    break;
-                case 'Hàng hư':
-                    tinhTrangClass += 'text-yellow-800 bg-yellow-100';
-                    break;
-                default:
-                    tinhTrangClass += 'text-gray-800 bg-gray-100';
+                case 'Hết hạn sử dụng': tinhTrangClass += 'text-red-800 bg-red-100'; break;
+                case 'Cận date': tinhTrangClass += 'text-blue-800 bg-blue-100'; break;
+                case 'Còn sử dụng': tinhTrangClass += 'text-green-800 bg-green-100'; break;
+                case 'Hàng hư': tinhTrangClass += 'text-yellow-800 bg-yellow-100'; break;
+                default: tinhTrangClass += 'text-gray-800 bg-gray-100';
             }
 
             const noteHtml = tk.note ? `
@@ -261,7 +340,7 @@ function renderTonKhoTable(data) {
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                     </button>
                                     <button class="ton-kho-copy-ma-vt-btn p-1 text-gray-400 hover:text-blue-600" data-ma-vt="${tk.ma_vt}" title="Copy mã">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                                     </button>
                                 </div>
                             </div>
@@ -282,6 +361,7 @@ function renderTonKhoTable(data) {
                     <td class="px-2 py-2 text-sm text-green-600 border border-gray-300 text-center">${tk.nhap}</td>
                     <td class="px-2 py-2 text-sm text-red-600 border border-gray-300 text-center">${tk.xuat}</td>
                     <td class="px-2 py-2 text-sm border border-gray-300 text-center ${tonCuoiClass}">${tk.ton_cuoi}</td>
+                    ${tonDenNgayHtml}
                     <td class="px-1 py-2 border border-gray-300 text-center whitespace-nowrap"><span class="${tinhTrangClass}">${tk.tinh_trang || ''}</span></td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.tray || ''}</td>
                     <td class="ton-kho-col-nganh px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${tk.nganh || ''}</td>
@@ -292,7 +372,8 @@ function renderTonKhoTable(data) {
         }).join('');
         tkTableBody.innerHTML = html;
     } else {
-        tkTableBody.innerHTML = '<tr><td colspan="15" class="text-center py-4">Không có dữ liệu</td></tr>';
+        const colSpan = hasDateTo ? 16 : 15;
+        tkTableBody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center py-4">Không có dữ liệu</td></tr>`;
     }
 }
 
@@ -443,6 +524,7 @@ async function handleTonKhoExcelExport() {
         modal.classList.add('hidden');
         showLoading(true);
         try {
+            const state = viewStates['view-ton-kho'];
             const query = exportAll ? sb.from('ton_kho_update').select('*') : buildTonKhoQuery().select('*');
             const { data, error } = await query.order('ma_vach').limit(50000);
             
@@ -452,10 +534,61 @@ async function handleTonKhoExcelExport() {
                 return;
             }
 
-            const worksheet = XLSX.utils.json_to_sheet(data);
+            const dateTo = state.dateTo;
+            const formattedDateHeader = dateTo ? dateTo.split('-').reverse().join('/') : new Date().toLocaleDateString('vi-VN');
+            const dateSuffix = dateTo ? dateTo.split('-').reverse().join('_') : new Date().toISOString().slice(0, 10).split('-').reverse().join('_');
+
+            // Nếu có lọc ngày, cần tính toán tồn tại ngày đó
+            let finalData = data;
+            if (dateTo) {
+                const { data: transData, error: transError } = await sb
+                    .from('chi_tiet')
+                    .select('ma_vach, nhap, xuat')
+                    .gt('thoi_gian', dateTo + 'T23:59:59');
+                
+                if (!transError && transData) {
+                    const transMap = {};
+                    transData.forEach(tr => {
+                        if (!transMap[tr.ma_vach]) transMap[tr.ma_vach] = { nhap: 0, xuat: 0 };
+                        transMap[tr.ma_vach].nhap += (tr.nhap || 0);
+                        transMap[tr.ma_vach].xuat += (tr.xuat || 0);
+                    });
+
+                    finalData = data.map(item => {
+                        const adj = transMap[item.ma_vach] || { nhap: 0, xuat: 0 };
+                        const tonDenNgay = (item.ton_cuoi || 0) - adj.nhap + adj.xuat;
+                        const newItem = { ...item };
+                        newItem[`Tồn đến (${formattedDateHeader})`] = tonDenNgay;
+                        return newItem;
+                    });
+                }
+            } else {
+                // Nếu không có ngày lọc, vẫn thêm cột "Tồn đến (Ngày hiện tại)" là chính số tồn cuối
+                finalData = data.map(item => {
+                    const newItem = { ...item };
+                    newItem[`Tồn đến (${formattedDateHeader})`] = item.ton_cuoi || 0;
+                    return newItem;
+                });
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(finalData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "TonKho");
-            XLSX.writeFile(workbook, `TonKho_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            // Xây dựng tên file
+            let filename = `TonKho_${dateSuffix}`;
+            if (!exportAll) {
+                const f = state.filters;
+                let suffix = "";
+                if (state.searchTerm) suffix += `_${state.searchTerm}`;
+                ['ma_vt', 'lot', 'nganh', 'phu_trach', 'tinh_trang'].forEach(k => {
+                    if (f[k] && f[k].length > 0) suffix += `_${f[k].join('-')}`;
+                });
+                if (suffix) filename += suffix.substring(0, 150);
+            }
+            
+            const safeFilename = filename.replace(/[^a-z0-9àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ\s\-_]/gi, '_');
+            XLSX.writeFile(workbook, `${safeFilename}.xlsx`);
             showToast("Xuất Excel thành công!", 'success');
         } catch (err) {
             showToast(`Lỗi khi xuất Excel: ${err.message}`, 'error');
@@ -530,14 +663,26 @@ export function initTonKhoView() {
         resetFiltersBtn.addEventListener('click', () => {
             const searchInput = document.getElementById('ton-kho-search');
             if (searchInput) searchInput.value = '';
-            viewStates['view-ton-kho'].searchTerm = '';
-            viewStates['view-ton-kho'].filters = { ma_vt: [], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
+            state.searchTerm = '';
+            state.filters = { ma_vt: [], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
             document.querySelectorAll('#view-ton-kho .filter-btn').forEach(btn => {
                 btn.textContent = filterButtonDefaultTexts[btn.id];
             });
+            const dateToInput = document.getElementById('ton-kho-date-to');
+            if (dateToInput) dateToInput.value = '';
+            state.dateTo = '';
+            
             state.stockAvailability = 'available';
             sessionStorage.setItem('tonKhoStockAvailability', 'available');
             updateTonKhoToggleUI();
+            fetchTonKho(1);
+        });
+    }
+
+    const dateToInput = document.getElementById('ton-kho-date-to');
+    if (dateToInput) {
+        dateToInput.addEventListener('change', (e) => {
+            viewStates['view-ton-kho'].dateTo = e.target.value;
             fetchTonKho(1);
         });
     }

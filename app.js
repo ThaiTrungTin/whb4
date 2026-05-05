@@ -39,6 +39,7 @@ export const viewStates = {
         stockAvailability: 'available',
         totalFilteredCount: 0,
         paginationText: '',
+        dateTo: '',
     },
     'view-don-hang': {
         currentPage: 1,
