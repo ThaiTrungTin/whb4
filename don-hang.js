@@ -1023,15 +1023,21 @@ function updateDonHangSelectionInfo() {
 }
 
 function updateDonHangActionButtonsState() {
-    const selectedCount = viewStates['view-don-hang'].selected.size;
+    const state = viewStates['view-don-hang'];
+    const selectedIds = Array.from(state.selected);
+    const selectedCount = selectedIds.length;
     const editBtn = document.getElementById('don-hang-btn-edit');
     const deleteBtn = document.getElementById('don-hang-btn-delete');
     const printBtn = document.getElementById('don-hang-btn-print');
     const msgBtn = document.getElementById('don-hang-btn-msg');
     const shipBtn = document.getElementById('don-hang-btn-shipping');
     
+    // Kiểm tra xem có đơn nào đã hoàn thành trong số các đơn đã chọn không
+    const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
+    const hasCompletedOrder = selectedOrders.some(dh => dh.ma_nx && !dh.ma_nx.endsWith('-'));
+
     if (editBtn) editBtn.disabled = selectedCount !== 1;
-    if (deleteBtn) deleteBtn.disabled = selectedCount === 0;
+    if (deleteBtn) deleteBtn.disabled = selectedCount === 0 || hasCompletedOrder;
     if (msgBtn) msgBtn.disabled = selectedCount === 0;
     if (shipBtn) shipBtn.disabled = selectedCount === 0;
     
@@ -1039,7 +1045,7 @@ function updateDonHangActionButtonsState() {
     if (printBtn) printBtn.disabled = isPrintDisabled;
 
     if (!isPrintDisabled && currentUser.phan_quyen === 'View') {
-        const selectedId = [...viewStates['view-don-hang'].selected][0];
+        const selectedId = selectedIds[0];
         const selectedOrder = cache.donHangList.find(dh => dh.ma_kho === selectedId);
         const isDisabledForView = !selectedOrder || selectedOrder.yeu_cau !== currentUser.ho_ten;
         if (printBtn) printBtn.disabled = isDisabledForView;
@@ -1871,6 +1877,15 @@ async function handleSaveDonHang(e, printAction = null) {
 async function handleDeleteMultipleDonHang() {
     const selectedIds = [...viewStates['view-don-hang'].selected];
     if (selectedIds.length === 0) return;
+
+    // Kiểm tra bảo mật: Không cho phép xóa đơn đã hoàn thành
+    const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
+    const hasCompletedOrder = selectedOrders.some(dh => dh.ma_nx && !dh.ma_nx.endsWith('-'));
+    
+    if (hasCompletedOrder) {
+        showToast("Không thể xóa đơn hàng đã hoàn thành.", "error");
+        return;
+    }
     
     const confirmed = await showConfirm(`Bạn có chắc muốn xóa ${selectedIds.length} đơn hàng? Thao tác này sẽ xóa vĩnh viễn cả chi tiết và file đính kèm.`);
     if (!confirmed) return;
