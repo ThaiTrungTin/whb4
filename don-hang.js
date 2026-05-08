@@ -1874,6 +1874,86 @@ async function handleSaveDonHang(e, printAction = null) {
     }
 }
 
+// --- DELETE VERIFICATION MODAL ---
+async function showDeleteVerifyModal() {
+    return new Promise(resolve => {
+        const modal = document.getElementById('delete-verify-modal');
+        if (!modal) {
+            console.error("delete-verify-modal not found");
+            resolve(false);
+            return;
+        }
+
+        const emailInput = document.getElementById('delete-verify-email');
+        const passwordInput = document.getElementById('delete-verify-password');
+        const confirmBtn = document.getElementById('delete-verify-confirm-btn');
+        const cancelBtn1 = document.getElementById('delete-verify-cancel-btn');
+        const cancelBtn2 = document.getElementById('delete-verify-cancel-btn-2');
+
+        // Reset inputs
+        emailInput.value = '';
+        passwordInput.value = '';
+
+        const cleanup = (result) => {
+            modal.classList.add('hidden');
+            confirmBtn.onclick = null;
+            cancelBtn1.onclick = null;
+            cancelBtn2.onclick = null;
+            passwordInput.onkeydown = null;
+            resolve(result);
+        };
+
+        const handleConfirm = async () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!email || !password) {
+                showToast("Vui lòng nhập đầy đủ thông tin.", "error");
+                return;
+            }
+
+            // Kiểm tra xem có đúng là user hiện tại không
+            if (email !== currentUser.gmail) {
+                showToast("Tên đăng nhập không đúng với tài khoản hiện tại.", "error");
+                return;
+            }
+
+            showLoading(true);
+            try {
+                // Kiểm tra mật khẩu trực tiếp từ bảng user để tránh làm mới session_id gây đăng xuất
+                const { data: userFromDb, error } = await sb
+                    .from('user')
+                    .select('mat_khau')
+                    .eq('gmail', email)
+                    .single();
+
+                if (error || !userFromDb || userFromDb.mat_khau !== password) {
+                    showToast("Xác thực thất bại: Mật khẩu không chính xác.", "error");
+                    return;
+                }
+
+                // Thành công
+                cleanup(true);
+            } catch (err) {
+                showToast("Lỗi xác thực: " + err.message, "error");
+            } finally {
+                showLoading(false);
+            }
+        };
+
+        cancelBtn1.onclick = () => cleanup(false);
+        cancelBtn2.onclick = () => cleanup(false);
+        confirmBtn.onclick = handleConfirm;
+        
+        passwordInput.onkeydown = (e) => {
+            if (e.key === 'Enter') handleConfirm();
+        };
+
+        modal.classList.remove('hidden');
+        passwordInput.focus();
+    });
+}
+
 async function handleDeleteMultipleDonHang() {
     const selectedIds = [...viewStates['view-don-hang'].selected];
     if (selectedIds.length === 0) return;
@@ -1887,8 +1967,9 @@ async function handleDeleteMultipleDonHang() {
         return;
     }
     
-    const confirmed = await showConfirm(`Bạn có chắc muốn xóa ${selectedIds.length} đơn hàng? Thao tác này sẽ xóa vĩnh viễn cả chi tiết và file đính kèm.`);
-    if (!confirmed) return;
+    // Yêu cầu xác thực mật khẩu trước khi xóa
+    const verified = await showDeleteVerifyModal();
+    if (!verified) return;
 
     showLoading(true);
     try {
