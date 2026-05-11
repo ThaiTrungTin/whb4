@@ -685,15 +685,17 @@
             const blocks = rawText.split(/-{7,}/).map(b => b.trim()).filter(b => b.length > 0);
 blocks.forEach(block => {
                 // Parse Mã NX, Ngành, Yêu Cầu từ dòng đầu tiên: (1) DO-2026-EES | WHB4 - ESC - Tran Canh Phuc
-                const headerMatch = block.match(/\(\d+\)\s*([^|]+)\s*\|\s*WHB4\s*-\s*([^-]+)\s*-\s*([^\n]+)/);
+                const headerMatch = block.match(/\(\d+\)\s*([^|]+?)(?:\s*\|\s*Team:\s*([^|]+))?\s*\|\s*WHB4\s*-\s*([^-]+)\s*-\s*([^\n]+)/);
                 let ma_nx = headerMatch ? headerMatch[1].trim() : 'CUSTOM';
                 let display_ma_nx = ma_nx;
                 if (ma_nx.endsWith('-')) {
                     display_ma_nx += '<span class="font-light tracking-[0.2em]"> . . .</span>';
                 }
                 let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 6 : 0);
-                let nganh = headerMatch ? headerMatch[2].trim() : 'N/A';
-                let yeu_cau = headerMatch ? headerMatch[3].trim() : 'N/A';
+                
+                let teamOverride = (headerMatch && headerMatch[2]) ? headerMatch[2].trim() : null;
+                let nganh = headerMatch ? headerMatch[3].trim() : 'N/A';
+                let yeu_cau = headerMatch ? headerMatch[4].trim() : 'N/A';
                 let yeu_cau_khong_dau = removeVietnameseTones(yeu_cau);
 
                 // Parse Nội dung : (Captures everything until "Gửi :" or end of block)
@@ -730,7 +732,7 @@ blocks.forEach(block => {
                                     <div class="sl-title whitespace-nowrap text-black">TỪ / FROM:</div>
                                     <div class="text-xl font-black text-black">WH-B4</div>
                                 </div>
-                                <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
+                                <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${teamOverride ? teamOverride : `${nganh} - ${yeu_cau_khong_dau}`}</div>
                             </div>
                             <div class="sl-section">
                                 <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${diaChi}</div>

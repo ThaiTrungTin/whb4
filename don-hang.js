@@ -14,6 +14,7 @@ let currentPrintChoiceMaKho = null;
 export let isNhapTraMode = false;
 let unreturnedMaNxCache = null;
 let trayListCache = null;
+let currentExportBlocks = [];
 
 async function getTrayList() {
     if (trayListCache) return trayListCache;
@@ -602,7 +603,15 @@ function renderDonHangTable(data) {
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.nganh || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left whitespace-pre-wrap min-w-[80px]">${dh.muc_dich || ''}</td>
                     <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-field="ghi_chu">
-                        <div class="cell-content cursor-help whitespace-pre-wrap min-w-[550px]" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
+                        <div class="note-container">
+                            <div class="cell-content cursor-help whitespace-pre-wrap min-w-[550px] line-clamp-2" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
+                            <div class="flex items-center gap-2 mt-1">
+                                ${calculateTotalKien(dh.ghi_chu) > 0 ? `<span class="font-black text-black text-xs">Tổng : ${calculateTotalKien(dh.ghi_chu)} Kiện</span>` : ''}
+                                ${dh.ghi_chu ? `
+                                    <button type="button" class="toggle-note-btn text-blue-600 font-bold hover:underline text-xs" onclick="event.stopPropagation(); window.toggleNote(this)">Xem thêm</button>
+                                ` : ''}
+                            </div>
+                        </div>
                     </td>
                     <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell outline-none focus:ring-2 focus:ring-blue-300" tabindex="0">
                         <div class="inline-file-upload-overlay absolute inset-0 bg-blue-500 bg-opacity-5 hidden group-hover:flex items-center justify-center pointer-events-none">
@@ -613,9 +622,25 @@ function renderDonHangTable(data) {
                 </tr>
             `;
         }).join('');
+        
+        // Sau khi render xong, kiểm tra xem ghi chú nào bị ẩn thì mới hiện nút "Xem thêm"
+        checkNotesOverflow();
     } else {
         tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4">Không có dữ liệu</td></tr>';
     }
+}
+
+function checkNotesOverflow() {
+    const tableBody = document.getElementById('don-hang-table-body');
+    if (!tableBody) return;
+    const containers = tableBody.querySelectorAll('.note-container');
+    containers.forEach(container => {
+        const content = container.querySelector('.cell-content');
+        const btn = container.querySelector('.toggle-note-btn');
+        if (btn && content.scrollHeight <= content.offsetHeight + 2) {
+            btn.style.display = 'none';
+        }
+    });
 }
 
 function updateChiTietSummary() {
@@ -1057,11 +1082,9 @@ async function handleExportMessage() {
     const selectedIds = Array.from(state.selected);
     if (selectedIds.length === 0) return;
 
-    // Lấy dữ liệu đầy đủ của các đơn hàng đã chọn từ cache
     const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
     
-    // Sắp xếp theo mã kho hoặc thời gian nếu cần (ở đây giữ nguyên thứ tự chọn/cache)
-    let messageText = '';
+    currentExportBlocks = [];
     let counter = 1;
 
     selectedOrders.forEach(order => {
@@ -1071,18 +1094,10 @@ async function handleExportMessage() {
         const ma_nx = order.ma_nx || order.ma_kho || '';
         const muc_dich = order.muc_dich || '';
 
-        // Tách ghi chú theo đường kẻ phân cách (ít nhất 5 dấu gạch dưới)
         const parts = ghi_chu.split(/_{5,}/).map(p => p.trim()).filter(p => p.length > 0);
-        
-        if (parts.length === 0 && ghi_chu.trim().length > 0) {
-            parts.push(ghi_chu.trim());
-        }
+        if (parts.length === 0 && ghi_chu.trim().length > 0) parts.push(ghi_chu.trim());
 
         parts.forEach(part => {
-            // Header: (1) Mã NX | WHB4 - Ngành - Yêu Cầu
-            messageText += `(${counter}) ${ma_nx} | WHB4 - ${nganh} - ${yeu_cau}\n`;
-            
-            // Tìm số lượng kiện: "Số Lượng : [X] Kiện"
             const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
             const slMatch = part.match(slRegex);
             
@@ -1095,24 +1110,227 @@ async function handleExportMessage() {
                 guiText = guiText.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
             }
 
-            messageText += `Gửi : ${guiText}\n`;
-            messageText += `Số Lượng : ${slText}\n`;
-            messageText += `-------\n\n`;
-            counter++;
+            currentExportBlocks.push({
+                checked: true,
+                ma_nx,
+                team: `${nganh} - ${removeVietnameseTones(yeu_cau)}`,
+                nganh,
+                yeu_cau,
+                muc_dich,
+                guiText,
+                slText,
+                isEditing: false
+            });
         });
     });
 
-    if (!messageText) {
+    if (currentExportBlocks.length === 0) {
         showToast('Không có nội dung ghi chú nào để xuất.', 'info');
         return;
     }
 
-    const modal = document.getElementById('msg-export-modal');
-    const contentArea = document.getElementById('msg-export-content');
-    contentArea.value = messageText.trim();
-    modal.classList.remove('hidden');
+    renderExportBlocks();
+    document.getElementById('msg-export-select-all').checked = true;
+    document.getElementById('msg-export-modal').classList.remove('hidden');
 }
 
+function renderExportBlocks() {
+    const listContainer = document.getElementById('msg-export-list');
+    if (!listContainer) return;
+
+    let displayCounter = 1;
+    listContainer.innerHTML = currentExportBlocks.map((block, index) => {
+        const currentDisplayIndex = block.checked ? displayCounter++ : '-';
+        const isEditing = block.isEditing || false;
+
+        if (isEditing) {
+            return `
+                <div class="bg-blue-50 p-3 rounded-md shadow-sm border border-blue-400 mb-3 flex gap-3 items-start" onclick="event.stopPropagation()">
+                    <div class="flex-grow space-y-2">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-blue-700 text-xs">Đang sửa #${index + 1}</span>
+                            <div class="flex gap-1">
+                                <button type="button" class="text-green-600 hover:text-green-800 p-1 bg-green-50 rounded" title="Lưu" onclick="saveExportBlock(${index})">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                </button>
+                                <button type="button" class="text-gray-400 hover:text-gray-600 p-1 bg-gray-100 rounded" title="Hủy" onclick="cancelEditExportBlock(${index})">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase">Mã NX:</span>
+                                <input type="text" id="edit-ma-nx-${index}" class="w-full p-1 text-xs border rounded focus:ring-1 focus:ring-blue-400 outline-none" value="${block.ma_nx || ''}">
+                            </div>
+                            ${block.ma_nx === 'CUSTOM' ? `
+                            <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase">Team:</span>
+                                <input type="text" id="edit-team-${index}" class="w-full p-1 text-xs border rounded focus:ring-1 focus:ring-blue-400 outline-none" value="${block.team || ''}" placeholder="Nhập Team (nếu có)">
+                            </div>
+                            ` : `<input type="hidden" id="edit-team-${index}" value="${block.team || ''}">`}
+                            <div class="grid grid-cols-[80px_1fr] items-start gap-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase mt-1">Nội dung:</span>
+                                <textarea id="edit-muc-dich-${index}" class="w-full p-1 text-xs border rounded h-16 focus:ring-1 focus:ring-blue-400 outline-none" placeholder="Nội dung">${block.muc_dich || ''}</textarea>
+                            </div>
+                            <div class="grid grid-cols-[80px_1fr] items-start gap-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase mt-1">Địa chỉ:</span>
+                                <textarea id="edit-guiText-${index}" class="w-full p-1 text-xs border rounded h-16 focus:ring-1 focus:ring-blue-400 outline-none" placeholder="Địa chỉ">${block.guiText || ''}</textarea>
+                            </div>
+                            <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase">Số lượng:</span>
+                                <input type="text" id="edit-slText-${index}" class="w-full p-1 text-xs border rounded focus:ring-1 focus:ring-blue-400 outline-none" 
+                                    placeholder="Số lượng" 
+                                    value="${(block.slText || '').replace(/\D/g, '')}" 
+                                    onfocus="this.select()"
+                                    oninput="this.value = this.value.replace(/[^0-9.]/g, '')">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="bg-white p-3 rounded-md shadow-sm border mb-3 flex gap-3 items-start cursor-pointer transition-all hover:shadow-md ${block.checked ? 'border-blue-300 hover:bg-blue-50' : 'opacity-60 grayscale hover:opacity-100'}" onclick="toggleExportBlock(${index})">
+                <input type="checkbox" class="msg-block-cb mt-1 w-5 h-5 cursor-pointer accent-blue-600" data-index="${index}" ${block.checked ? 'checked' : ''} onclick="event.stopPropagation(); toggleExportBlock(${index})">
+                <div class="flex-grow">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="font-bold text-blue-700">
+                            ${block.checked ? `(${currentDisplayIndex})` : '(Bỏ)'} ${block.ma_nx}
+                        </span>
+                        <div class="flex items-center gap-0.5">
+                            <button type="button" class="text-blue-400 hover:text-blue-600 p-1 rounded hover:bg-blue-100 transition-colors" title="Sửa tem này" onclick="event.stopPropagation(); startEditExportBlock(${index})">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <button type="button" class="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors" title="Xóa tem này" onclick="event.stopPropagation(); removeExportBlock(${index})">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-[11px] text-gray-700 space-y-0.5 select-none" ondblclick="event.stopPropagation(); startEditExportBlock(${index})">
+                        ${block.ma_nx === 'CUSTOM' && block.team ? `<p><strong>Team:</strong> ${block.team}</p>` : ''}
+                        <p><strong>Nội dung:</strong> ${block.muc_dich || '...'}</p>
+                        <p><strong>Gửi:</strong> ${block.guiText || '...'}</p>
+                        <p><strong>Số lượng:</strong> ${block.slText || '...'}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    updateExportTextarea();
+}
+
+window.startEditExportBlock = function(index) {
+    currentExportBlocks[index].isEditing = true;
+    renderExportBlocks();
+};
+
+window.cancelEditExportBlock = function(index) {
+    currentExportBlocks[index].isEditing = false;
+    renderExportBlocks();
+};
+
+window.saveExportBlock = function(index) {
+    const ma_nx = document.getElementById(`edit-ma-nx-${index}`).value.trim();
+    const team = document.getElementById(`edit-team-${index}`).value.trim();
+    const muc_dich = document.getElementById(`edit-muc-dich-${index}`).value.trim();
+    const guiText = document.getElementById(`edit-guiText-${index}`).value.trim();
+    let slRaw = document.getElementById(`edit-slText-${index}`).value.trim();
+    
+    // Tự động thêm "Kiện" nếu là số
+    let slText = slRaw;
+    if (slRaw && !isNaN(slRaw)) {
+        slText = slRaw + ' Kiện';
+    } else if (!slRaw) {
+        slText = '1 Kiện';
+    }
+
+    currentExportBlocks[index] = {
+        ...currentExportBlocks[index],
+        ma_nx,
+        team,
+        muc_dich,
+        guiText,
+        slText,
+        isEditing: false
+    };
+    renderExportBlocks();
+};
+
+window.removeExportBlock = function(index) {
+    currentExportBlocks.splice(index, 1);
+    renderExportBlocks();
+};
+
+window.addExportBlock = function() {
+    currentExportBlocks.push({
+        checked: true,
+        isEditing: true, // Mở chế độ sửa ngay lập tức
+        ma_nx: 'CUSTOM',
+        team: '', // Mặc định trống
+        nganh: 'WHB4',
+        yeu_cau: currentUser.ho_ten || 'Admin',
+        muc_dich: '',
+        guiText: '',
+        slText: '1 Kiện'
+    });
+    renderExportBlocks();
+    const listContainer = document.getElementById('msg-export-list');
+    setTimeout(() => listContainer.scrollTop = listContainer.scrollHeight, 50);
+};
+
+window.toggleExportBlock = function(index) {
+    currentExportBlocks[index].checked = !currentExportBlocks[index].checked;
+    renderExportBlocks();
+    
+    // Cập nhật trạng thái nút "Chọn tất cả"
+    const allChecked = currentExportBlocks.every(b => b.checked);
+    document.getElementById('msg-export-select-all').checked = allChecked;
+};
+
+function updateExportTextarea() {
+    const contentArea = document.getElementById('msg-export-content');
+    const checkedBlocks = currentExportBlocks.filter(b => b.checked);
+    
+    let counter = 1;
+    const text = checkedBlocks.map(block => {
+        let blockText = `(${counter}) ${block.ma_nx}${block.team ? ` | Team: ${block.team}` : ''} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
+        blockText += `Nội dung : ${block.muc_dich}\n`;
+        blockText += `Gửi : ${block.guiText}\n`;
+        blockText += `Số Lượng : ${block.slText}\n`;
+        blockText += `-------\n\n`;
+        counter++;
+        return blockText;
+    }).join('');
+    
+    contentArea.value = text.trim();
+}
+
+
+function calculateTotalKien(text) {
+    if (!text) return 0;
+    // Regex tìm kiếm tất cả các cụm "Số Lượng : [số] Kiện" (không phân biệt hoa thường)
+    const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.,]+)\s*Kiện/gi;
+    let total = 0;
+    let match;
+    while ((match = slRegex.exec(text)) !== null) {
+        const numStr = match[1].trim().replace(/\s/g, '').replace(',', '.');
+        const num = parseFloat(numStr);
+        if (!isNaN(num)) {
+            total += num;
+        }
+    }
+    return total;
+}
+
+function removeVietnameseTones(str) {
+    if (!str) return '';
+    str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    str = str.replace(/đ/g, "d").replace(/Đ/g, "D");
+    return str;
+}
 
 function generateMaKho(loai) {
     const prefix = loai === 'Nhap' ? 'IN' : 'OUT';
@@ -2274,38 +2492,85 @@ export function initDonHangView() {
         }
     });
 
-    // Chức năng cho cột Ghi Chú: Tự động điền 'Số Lượng :  ... Kiện' và chèn ngăn cách Shift + Enter
+    // Chức năng cho cột Ghi Chú: Tự động điền 'Số Lượng : ' và thông minh hóa việc điền
     const ghiChuInput = document.getElementById('don-hang-modal-ghi-chu');
     if (ghiChuInput) {
         ghiChuInput.addEventListener('focus', function() {
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
             if (loaiDon === 'Nhap') return;
             if (!this.value.trim()) {
-                this.value = 'Số Lượng :  ... Kiện';
-                // Đưa cursor về trước dấu ...
-                const pos = 13; // "Số Lượng :  ".length
-                setTimeout(() => {
-                    this.setSelectionRange(pos, pos + 3);
-                }, 0);
+                this.value = 'Số Lượng : ';
+                const pos = this.value.length;
+                setTimeout(() => this.setSelectionRange(pos, pos), 0);
             }
         });
 
         ghiChuInput.addEventListener('keydown', function(e) {
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
             if (loaiDon === 'Nhap') return;
-            if (e.key === 'Enter' && e.shiftKey) {
+
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const start = this.selectionStart;
+                const text = this.value;
+                const lastLineStart = text.lastIndexOf('\n', start - 1) + 1;
+                const currentLine = text.substring(lastLineStart, start);
+
+                if (currentLine.startsWith('Số Lượng :')) {
+                    e.preventDefault();
+                    let slRaw = currentLine.replace('Số Lượng :', '').trim();
+                    let slText = slRaw || '1';
+                    if (slRaw && !isNaN(slRaw.replace(',', '.'))) {
+                        slText = slRaw + ' Kiện';
+                    } else if (slRaw && !slRaw.endsWith('Kiện')) {
+                        slText = slRaw + ' Kiện';
+                    } else if (!slRaw) {
+                        slText = '1 Kiện';
+                    }
+                    
+                    const before = text.substring(0, lastLineStart);
+                    const after = text.substring(start);
+                    const newLine = `Số Lượng : ${slText}\nGửi : `;
+                    this.value = before + newLine + after;
+                    
+                    const newPos = before.length + newLine.length;
+                    this.setSelectionRange(newPos, newPos);
+                }
+            } else if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
                 const start = this.selectionStart;
-                const end = this.selectionEnd;
                 const text = this.value;
                 const before = text.substring(0, start);
-                const after = text.substring(end);
-                const separator = '\n_____________\nSố Lượng :  ... Kiện';
+                const after = text.substring(this.selectionEnd);
+                const separator = '\n_____________\nSố Lượng : ';
                 this.value = before + separator + after;
-                
-                // Di chuyển cursor đến vị trí mới
-                const newPos = start + separator.length - 8; // Vị trí dấu ...
-                this.setSelectionRange(newPos, newPos + 3);
+                const newPos = before.length + separator.length;
+                this.setSelectionRange(newPos, newPos);
+            }
+        });
+
+        ghiChuInput.addEventListener('input', function() {
+            const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+            if (loaiDon === 'Nhap') return;
+
+            const start = this.selectionStart;
+            const text = this.value;
+            const lastLineStart = text.lastIndexOf('\n', start - 1) + 1;
+            const currentLine = text.substring(lastLineStart, start);
+
+            if (currentLine.startsWith('Số Lượng :')) {
+                const slPart = currentLine.replace('Số Lượng :', '').trim();
+                // Nếu người dùng "lì" - gõ ký tự không phải số/dấu phẩy/chấm sau Số Lượng
+                if (slPart.length > 0 && !/^[0-9.,]*$/.test(slPart) && !slPart.endsWith('Kiện')) {
+                    const lastChar = slPart.slice(-1);
+                    const slNum = slPart.slice(0, -1).trim() || '1';
+                    
+                    const before = text.substring(0, lastLineStart);
+                    const after = text.substring(start);
+                    const newLine = `Số Lượng : ${slNum} Kiện\nGửi : ${lastChar}`;
+                    this.value = before + newLine + after;
+                    const newPos = before.length + newLine.length;
+                    this.setSelectionRange(newPos, newPos);
+                }
             }
         });
     }
@@ -2341,12 +2606,25 @@ export function initDonHangView() {
     const copyMsgBtn = document.getElementById('copy-msg-btn');
     if (copyMsgBtn) {
         copyMsgBtn.addEventListener('click', () => {
-            const contentArea = document.getElementById('msg-export-content');
-            if (!contentArea.value) return;
-            
-            contentArea.select();
-            navigator.clipboard.writeText(contentArea.value).then(() => {
-                showToast('Đã copy tin nhắn vào clipboard!', 'success');
+            const checkedBlocks = currentExportBlocks.filter(b => b.checked);
+            if (checkedBlocks.length === 0) {
+                showToast('Vui lòng chọn ít nhất một địa chỉ để copy.', 'info');
+                return;
+            }
+
+            let counter = 1;
+            const copyText = checkedBlocks.map(block => {
+                let blockText = `(${counter}) ${block.ma_nx}${block.team ? ` | Team: ${block.team}` : ''} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
+                // KHÔNG bao gồm Nội dung khi copy theo yêu cầu người dùng
+                blockText += `Gửi : ${block.guiText}\n`;
+                blockText += `Số Lượng : ${block.slText}\n`;
+                blockText += `-------\n\n`;
+                counter++;
+                return blockText;
+            }).join('').trim();
+
+            navigator.clipboard.writeText(copyText).then(() => {
+                showToast('Đã copy tin nhắn (đã loại bỏ phần Nội dung)!', 'success');
             }).catch(err => {
                 showToast('Lỗi khi copy: ' + err, 'error');
             });
@@ -2367,6 +2645,20 @@ export function initDonHangView() {
                 printIframe.src = `print-pkl.html?mode=custom_shipping&t=${Date.now()}`;
             }
         });
+    }
+
+    const msgSelectAllCb = document.getElementById('msg-export-select-all');
+    if (msgSelectAllCb) {
+        msgSelectAllCb.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            currentExportBlocks.forEach(b => b.checked = isChecked);
+            renderExportBlocks();
+        });
+    }
+
+    const msgAddBtn = document.getElementById('msg-export-add-btn');
+    if (msgAddBtn) {
+        msgAddBtn.addEventListener('click', window.addExportBlock);
     }
 
     document.getElementById('don-hang-modal-loai-don').addEventListener('change', () => {
@@ -2825,25 +3117,67 @@ function enterInlineEditMode(cell) {
         input.addEventListener('focus', function() {
             if (dh && dh.loai_don === 'Nhap') return;
             if (!this.value.trim()) {
-                this.value = 'Số Lượng :  ... Kiện';
-                const pos = 13;
-                setTimeout(() => this.setSelectionRange(pos, pos + 3), 0);
+                this.value = 'Số Lượng : ';
+                const pos = this.value.length;
+                setTimeout(() => this.setSelectionRange(pos, pos), 0);
             }
         });
 
         input.addEventListener('keydown', function(e) {
             if (dh && dh.loai_don === 'Nhap') return;
-            if (e.key === 'Enter' && e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const start = this.selectionStart;
+                const text = this.value;
+                const lastLineStart = text.lastIndexOf('\n', start - 1) + 1;
+                const currentLine = text.substring(lastLineStart, start);
+
+                if (currentLine.startsWith('Số Lượng :')) {
+                    e.preventDefault();
+                    let slRaw = currentLine.replace('Số Lượng :', '').trim();
+                    let slText = slRaw || '1';
+                    if (slRaw && !isNaN(slRaw.replace(',', '.'))) slText = slRaw + ' Kiện';
+                    else if (slRaw && !slRaw.endsWith('Kiện')) slText = slRaw + ' Kiện';
+                    else if (!slRaw) slText = '1 Kiện';
+                    
+                    const before = text.substring(0, lastLineStart);
+                    const after = text.substring(start);
+                    const newLine = `Số Lượng : ${slText}\nGửi : `;
+                    this.value = before + newLine + after;
+                    const newPos = before.length + newLine.length;
+                    this.setSelectionRange(newPos, newPos);
+                }
+            } else if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault();
                 const start = this.selectionStart;
-                const end = this.selectionEnd;
                 const text = this.value;
                 const before = text.substring(0, start);
-                const after = text.substring(end);
-                const separator = '\n_____________\nSố Lượng :  ... Kiện';
+                const after = text.substring(this.selectionEnd);
+                const separator = '\n_____________\nSố Lượng : ';
                 this.value = before + separator + after;
-                const newPos = start + separator.length - 8;
-                this.setSelectionRange(newPos, newPos + 3);
+                const newPos = before.length + separator.length;
+                this.setSelectionRange(newPos, newPos);
+            }
+        });
+
+        input.addEventListener('input', function() {
+            if (dh && dh.loai_don === 'Nhap') return;
+            const start = this.selectionStart;
+            const text = this.value;
+            const lastLineStart = text.lastIndexOf('\n', start - 1) + 1;
+            const currentLine = text.substring(lastLineStart, start);
+
+            if (currentLine.startsWith('Số Lượng :')) {
+                const slPart = currentLine.replace('Số Lượng :', '').trim();
+                if (slPart.length > 0 && !/^[0-9.,]*$/.test(slPart) && !slPart.endsWith('Kiện')) {
+                    const lastChar = slPart.slice(-1);
+                    const slNum = slPart.slice(0, -1).trim() || '1';
+                    const before = text.substring(0, lastLineStart);
+                    const after = text.substring(start);
+                    const newLine = `Số Lượng : ${slNum} Kiện\nGửi : ${lastChar}`;
+                    this.value = before + newLine + after;
+                    const newPos = before.length + newLine.length;
+                    this.setSelectionRange(newPos, newPos);
+                }
             }
         });
     } else if (field === 'ma_nx') {
@@ -3007,3 +3341,14 @@ export function attachDonHangTableListeners() {
 
 // Tự động gọi khi load module
 setTimeout(attachDonHangTableListeners, 500);
+
+window.toggleNote = function(btn) {
+    const container = btn.closest('.note-container');
+    const isExpanded = container.classList.toggle('expanded');
+    btn.textContent = isExpanded ? 'Ẩn bớt' : 'Xem thêm';
+    
+    // Nếu thu gọn lại, cuộn dòng đó lên đầu tầm mắt nếu cần (optional)
+    if (!isExpanded) {
+        container.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+};
