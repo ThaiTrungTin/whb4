@@ -791,7 +791,7 @@ function renderChiTietTable() {
                 </td>
                 <td class="p-1 border align-top text-center font-mono ${barcodeColorClass}">${generatedBarcode || ''}</td>
                 <td class="p-1 border text-center align-top">
-                    ${!isViewMode && !isNhapTraMode ? `<button type="button" class="text-red-500 hover:text-red-700 chi-tiet-delete-btn text-xl font-bold">&times;</button>` : ''}
+                    ${!isViewMode && (!isNhapTraMode || (isNhapTraMode && (parseFloat(item.yc_sl) || 0) === 0)) ? `<button type="button" class="text-red-500 hover:text-red-700 chi-tiet-delete-btn text-xl font-bold">&times;</button>` : ''}
                 </td>
             </tr>
             <tr data-info-id="${item.id}" class="bg-blue-50">
@@ -1647,7 +1647,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                         <div class="flex flex-col pointer-events-none">
                             <p class="text-sm font-medium text-gray-900">${item.ma_nx}</p>
                             <p class="text-xs text-gray-500 mt-1">${item.muc_dich || ''}</p>
-                            <p class="text-xs text-blue-600 mt-0.5 italic">Yêu cầu: ${item.yeu_cau || ''}</p>
+                            <p class="text-xs text-blue-600 mt-0.5 italic">Yêu cầu: ${item.yeu_cau || ''} - ${formatDateToDDMMYYYY(item.thoi_gian)}</p>
                         </div>
                     `,
                     width: `350px`,
@@ -1661,7 +1661,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                             
                             showLoading(true);
                             try {
-                                const { data: ctData } = await sb.from('chi_tiet').select('*').eq('ma_kho', selectedItem.ma_kho).eq('loai', 'Trưng Bày');
+                                const { data: ctData } = await sb.from('chi_tiet').select('*').eq('ma_kho', selectedItem.ma_kho).eq('loai', 'Trưng Bày').order('stt', { ascending: true });
                                 chiTietItems = [];
                                 
                                 for (const ct of (ctData || [])) {
