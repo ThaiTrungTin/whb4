@@ -50,9 +50,10 @@
 
         /* Thiết kế Tem SP (Tem nhỏ) */
         .label-item {
-            width: 70mm;
+            width: 74mm;
+            height: 72mm;
             padding: 6px;
-            margin-bottom: 5mm;
+            margin-bottom: 2mm;
             font-family: Tahoma, sans-serif;
             page-break-inside: avoid;
             break-inside: avoid;
@@ -64,8 +65,8 @@
 
         /* Thiết kế Phiếu Vận Chuyển */
         .shipping-label {
-            width: 70mm;
-            min-height: 70mm;
+            width: 74mm;
+            height: 72mm;
             border: 1px solid black;
             font-family: Tahoma, sans-serif;
             background: white;
@@ -159,11 +160,11 @@
 
             @page {
                 margin: 0;
-                size: auto;
+                size: 74mm 72mm;
             }
 
             body.printing-labels #label-area>div {
-                margin-left: 2mm;
+                margin-left: 8mm; /* Tăng lên 8mm (5mm cũ + 3mm bù trừ) để không cần chỉnh lề thủ công */
                 margin-top: 2mm;
             }
 
@@ -172,11 +173,11 @@
                 transform: scale(1.38) !important;
                 transform-origin: top left;
                 margin-bottom: 35mm !important; /* Tăng khoảng cách vì bị scale */
-                margin-left: 5mm !important;
+                margin-left: 8mm !important;
             }
 
             body.printing-labels .label-item {
-                margin-bottom: 5mm;
+                margin-bottom: 0;
             }
 
             .label-item,
@@ -568,17 +569,20 @@
             const pad = (n) => n.toString().padStart(2, '0');
             formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 
+            const ma_vt_len = (item.ma_vt || '').length;
+            const maVtFontSize = Math.min(36, Math.max(14, Math.floor(280 / ma_vt_len)));
+
             return `
                 <div class="label-item">
                     <div class="absolute inset-0 border border-black z-50 pointer-events-none"></div>
                     
                     <img src="${logoUrl}" class="absolute -top-4 left-1.5 w-40 h-auto object-contain z-0" alt="Logo">
                     
-                    <div class="relative z-10">
+                    <div class="relative z-10 h-full flex flex-col">
                         <div class="flex justify-between items-start border-b border-black pb-1 mb-2">
-                            <div class="flex flex-col max-w-[75%]">
+                            <div class="flex flex-col flex-grow overflow-hidden">
                                 <div class="h-10 w-full"></div> 
-                                <span class="text-3xl font-black tracking-tight leading-none break-words -mt-1 text-black">${item.ma_vt}</span>
+                                <span class="font-black tracking-tight leading-none whitespace-nowrap text-black" style="font-size: ${maVtFontSize}px;">${item.ma_vt}</span>
                             </div>
                             <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white uppercase">
                                 ${isRelabel ? '' : `<div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>`}
@@ -592,19 +596,25 @@
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-2 text-xs font-bold mb-2 pb-1 border-b border-black border-dashed text-black">
-                            <div class="text-left whitespace-nowrap overflow-hidden text-ellipsis pr-1">LOT: ${item.lot || ''}</div>
-                            <div class="text-right whitespace-nowrap overflow-hidden text-ellipsis pl-1">DATE: ${item.date || ''}</div>
+                        <div class="grid grid-cols-2 font-bold mb-2 pb-1 border-b border-black border-dashed text-black">
+                            <div class="text-left whitespace-nowrap overflow-hidden text-ellipsis pr-1 text-lg">LOT: ${item.lot || ''}</div>
+                            <div class="text-right whitespace-nowrap overflow-hidden text-ellipsis pl-1 text-xs mt-1">DATE: ${item.date || ''}</div>
                         </div>
                         
-                        <div class="text-sm font-semibold leading-tight text-left text-black">
-                            ${item.ten_vt}
+                        <!-- Ô Tên vật tư: Giảm xuống h-6 (~1.1-1.2 lần font), giới hạn 2 dòng, căn giữa dọc -->
+                        <div class="flex items-center text-left text-black h-6 mb-1">
+                            <div class="text-sm font-semibold leading-tight line-clamp-2 overflow-hidden">
+                                ${item.ten_vt}
+                            </div>
                         </div>
                         
-                        <div class="mt-1 pt-1 text-[10px] italic text-black border-t border-black">
+                        <!-- Nội dung (Yêu cầu & Mục đích): Tối đa 4 dòng, tự động co dãn nhưng giới hạn 4 dòng -->
+                        <div class="mt-1 pt-1 text-[12px] italic text-black border-t border-black line-clamp-4 overflow-hidden">
                             ${isRelabel ? '' : `<span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - ${muc_dich}`}
                         </div>
-                        <div class="text-[8px] text-right italic text-black mt-1">
+
+                        <!-- Thời gian in: Sát đáy bằng absolute để không chiếm diện tích của nội dung -->
+                        <div class="absolute bottom-1 right-2 text-[10px] italic text-black">
                             ${formattedPrintTime}
                         </div>
                     </div>

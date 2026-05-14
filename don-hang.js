@@ -1,13 +1,13 @@
 
 import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, currentUser, openAutocomplete, addJobToOfflineQueue, openPrintPreviewModal } from './app.js';
 
-let selectedDonHangFiles = [];
-let initialExistingFiles = [];
-let currentExistingFiles = [];
-let chiTietItems = [];
-let initialChiTietItems = [];
-let initialDonHangData = {};
-let chiTietSortable = null;
+let selectedDonHangFiles = []; 
+let initialExistingFiles = []; 
+let currentExistingFiles = []; 
+let chiTietItems = []; 
+let initialChiTietItems = []; 
+let initialDonHangData = {}; 
+let chiTietSortable = null; 
 let activeLotPopover = null;
 let saveDonHangBtn, saveAndPrintBtn;
 let currentPrintChoiceMaKho = null;
@@ -41,14 +41,14 @@ async function getUnreturnedMaNxList() {
             .select('ma_kho, ma_nx, muc_dich, yeu_cau, nganh, thoi_gian')
             .gt('xuat', 0)
             .eq('loai', 'Trưng Bày');
-
-        const unreturnedItems = (displayExports || []).filter(exportItem => {
+            
+        const unreturnedItems = (displayExports||[]).filter(exportItem => {
             if (!exportItem.ma_nx) return false;
             const maNxToSearch = exportItem.ma_nx.trim().toLowerCase();
             const isReturned = allReturnStrings.some(returnString => returnString.includes(maNxToSearch));
             return !isReturned;
         });
-
+        
         const uniqueMap = new Map();
         unreturnedItems.forEach(item => {
             if (!uniqueMap.has(item.ma_nx)) {
@@ -66,7 +66,7 @@ async function getUnreturnedMaNxList() {
         unreturnedMaNxCache = Array.from(uniqueMap.values());
         unreturnedMaNxCache.sort((a, b) => new Date(b.thoi_gian || 0) - new Date(a.thoi_gian || 0));
         return unreturnedMaNxCache;
-    } catch (e) {
+    } catch(e) {
         console.error("Error getUnreturnedMaNxList", e);
         return [];
     } finally {
@@ -113,7 +113,7 @@ async function getPendingAmountsByMaVach(maVachList, currentMaKho) {
     let pendingOrdersQuery = sb.from('don_hang')
         .select('ma_kho')
         .like('ma_nx', '%-');
-
+    
     if (currentMaKho) {
         pendingOrdersQuery = pendingOrdersQuery.neq('ma_kho', currentMaKho);
     }
@@ -124,7 +124,7 @@ async function getPendingAmountsByMaVach(maVachList, currentMaKho) {
     }
 
     const pendingMaKhoList = pendingOrders.map(o => o.ma_kho);
-
+    
     // Lấy chi tiết của các đơn hàng đó
     const { data: pendingChiTiet, error: chiTietError } = await sb.from('chi_tiet')
         .select('ma_vach, nhap, xuat')
@@ -154,16 +154,16 @@ const debouncedValidateMaKho = debounce(async (ma_kho) => {
     const statusEl = document.getElementById('don-hang-modal-ma-kho-status');
     const inputEl = document.getElementById('don-hang-modal-ma-kho');
     const ma_kho_orig = document.getElementById('don-hang-edit-mode-ma-kho').value;
-
+    
     if (!ma_kho) {
         statusEl.textContent = '';
         saveDonHangBtn.disabled = true;
         if (saveAndPrintBtn) saveAndPrintBtn.disabled = true;
         return;
     }
-
+    
     let query = sb.from('don_hang').select('ma_kho', { count: 'exact', head: true }).eq('ma_kho', ma_kho);
-    if (ma_kho_orig && ma_kho === ma_kho_orig) {
+    if(ma_kho_orig && ma_kho === ma_kho_orig) {
         statusEl.textContent = 'Hợp lệ';
         statusEl.className = 'text-xs mt-1 h-4 text-green-600';
         inputEl.classList.remove('text-red-600');
@@ -226,7 +226,7 @@ const debouncedValidateMaNx = debounce(async (ma_nx) => {
         const isDisabled = document.getElementById('don-hang-modal-ma-kho').classList.contains('text-red-600');
         saveDonHangBtn.disabled = isDisabled;
         if (saveAndPrintBtn) saveAndPrintBtn.disabled = isDisabled;
-        return;
+        return; 
     }
 
     // Nếu không kết thúc bằng '-', tức là đã xử lý xong số thứ tự -> Kiểm tra tính duy nhất
@@ -262,12 +262,12 @@ const debouncedValidateMaNx = debounce(async (ma_nx) => {
 function formatDateToDDMMYYYY(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '';
-
+    if (isNaN(date.getTime())) return ''; 
+    
     const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); 
     const year = date.getFullYear();
-
+    
     return `${day}/${month}/${year}`;
 }
 
@@ -325,7 +325,7 @@ async function openDonHangFilterPopover(button, view) {
     const searchInput = popover.querySelector('.filter-search-input');
     const selectionCountEl = popover.querySelector('.filter-selection-count');
     const toggleAllBtn = popover.querySelector('.filter-toggle-all-btn');
-
+    
     const tempSelectedOptions = new Set(state.filters[filterKey] || []);
 
     const updateSelectionCount = () => {
@@ -346,7 +346,7 @@ async function openDonHangFilterPopover(button, view) {
 
     const renderOptions = (options) => {
         const searchTerm = searchInput.value.toLowerCase();
-        const filteredOptions = options.filter(option =>
+        const filteredOptions = options.filter(option => 
             option && String(option).toLowerCase().includes(searchTerm)
         );
         optionsList.innerHTML = filteredOptions.length > 0 ? filteredOptions.map(option => `
@@ -357,10 +357,10 @@ async function openDonHangFilterPopover(button, view) {
         `).join('') : '<div class="text-center p-4 text-sm text-gray-500">Không có tùy chọn.</div>';
         updateToggleAllButtonState(filteredOptions);
     };
-
+    
     const setupEventListeners = (allOptions) => {
         searchInput.addEventListener('input', () => renderOptions(allOptions));
-
+        
         optionsList.addEventListener('change', e => {
             const cb = e.target;
             if (cb.type === 'checkbox' && cb.classList.contains('filter-option-cb')) {
@@ -373,15 +373,15 @@ async function openDonHangFilterPopover(button, view) {
                 updateToggleAllButtonState(allOptions.filter(opt => opt.toLowerCase().includes(searchInput.value.toLowerCase())));
             }
         });
-
+        
         toggleAllBtn.onclick = () => {
             const searchTerm = searchInput.value.toLowerCase();
-            const visibleOptions = allOptions.filter(option =>
+            const visibleOptions = allOptions.filter(option => 
                 option && String(option).toLowerCase().includes(searchTerm)
             );
-
+            
             const isSelectAllAction = toggleAllBtn.textContent === 'Tất cả';
-
+            
             visibleOptions.forEach(option => {
                 if (isSelectAllAction) {
                     tempSelectedOptions.add(String(option));
@@ -412,12 +412,12 @@ async function openDonHangFilterPopover(button, view) {
         applyBtn.disabled = true;
         try {
             let query = sb.from('don_hang').select(filterKey);
-
+            
             const otherFilters = { ...state.filters };
-
+            
             if (state.searchTerm) {
-                const st = `%${state.searchTerm}%`;
-                query = query.or(`ma_kho.ilike.${st},ma_nx.ilike.${st},yeu_cau.ilike.${st},nganh.ilike.${st},muc_dich.ilike.${st},ghi_chu.ilike.${st}`);
+                 const st = `%${state.searchTerm}%`;
+                 query = query.or(`ma_kho.ilike.${st},ma_nx.ilike.${st},yeu_cau.ilike.${st},nganh.ilike.${st},muc_dich.ilike.${st},ghi_chu.ilike.${st}`);
             }
 
             if (otherFilters.from_date) query = query.gte('thoi_gian', otherFilters.from_date);
@@ -428,7 +428,7 @@ async function openDonHangFilterPopover(button, view) {
                 query = query.ilike('ma_kho', loaiPrefix);
             }
 
-            if (filterKey !== 'trang_thai_xu_ly' && otherFilters.trang_thai_xu_ly?.length === 1) {
+             if (filterKey !== 'trang_thai_xu_ly' && otherFilters.trang_thai_xu_ly?.length === 1) {
                 if (otherFilters.trang_thai_xu_ly[0] === 'Đang xử lý') {
                     query = query.like('ma_nx', '%-');
                 } else if (otherFilters.trang_thai_xu_ly[0] === 'Đã xử lý') {
@@ -442,7 +442,7 @@ async function openDonHangFilterPopover(button, view) {
 
             const { data, error } = await query.limit(1000);
             if (error) throw error;
-
+            
             const uniqueOptions = [...new Set(data.map(item => item[filterKey]).filter(Boolean))].sort();
             renderOptions(uniqueOptions);
             setupEventListeners(uniqueOptions);
@@ -454,7 +454,7 @@ async function openDonHangFilterPopover(button, view) {
             showToast(`Lỗi tải bộ lọc cho: ${filterKey}.`, 'error');
         }
     }
-
+    
     const closePopover = (e) => {
         if (!popover.contains(e.target) && e.target !== button) {
             popover.remove();
@@ -464,12 +464,12 @@ async function openDonHangFilterPopover(button, view) {
 
     applyBtn.onclick = () => {
         state.filters[filterKey] = [...tempSelectedOptions];
-
+        
         const defaultText = filterButtonDefaultTexts[button.id] || button.id;
         button.textContent = tempSelectedOptions.size > 0 ? `${defaultText} (${tempSelectedOptions.size})` : defaultText;
-
+        
         fetchDonHang(1);
-
+        
         popover.remove();
         document.removeEventListener('click', closePopover);
     };
@@ -492,7 +492,7 @@ function buildDonHangQuery() {
         const loaiPrefix = state.filters.loai[0] === 'Nhập' ? 'IN.%' : 'OUT.%';
         query = query.ilike('ma_kho', loaiPrefix);
     }
-
+    
     const trangThaiFilter = state.filters.trang_thai_xu_ly || [];
     if (trangThaiFilter.length === 1) {
         if (trangThaiFilter[0] === 'Đang xử lý') {
@@ -521,7 +521,7 @@ export async function fetchDonHang(page = viewStates['view-don-hang'].currentPag
         const state = viewStates['view-don-hang'];
         state.selected.clear();
         updateDonHangActionButtonsState();
-        updateDonHangSelectionInfo();
+        updateDonHangSelectionInfo(); 
 
         const { itemsPerPage } = state;
         const from = (page - 1) * itemsPerPage;
@@ -529,25 +529,25 @@ export async function fetchDonHang(page = viewStates['view-don-hang'].currentPag
 
         const queryBuilder = buildDonHangQuery();
         if (!queryBuilder || typeof queryBuilder.order !== 'function') {
-            console.error('Lỗi truy vấn đơn hàng. Đối tượng trả về không hợp lệ.', queryBuilder);
-            showToast('Lỗi nghiêm trọng khi tạo truy vấn đơn hàng.', 'error');
-            throw new Error('Invalid query builder');
+             console.error('Lỗi truy vấn đơn hàng. Đối tượng trả về không hợp lệ.', queryBuilder);
+             showToast('Lỗi nghiêm trọng khi tạo truy vấn đơn hàng.', 'error');
+             throw new Error('Invalid query builder');
         }
-
+        
         const { data, error, count } = await queryBuilder.order('thoi_gian', { ascending: false }).range(from, to);
-
+        
         if (error) {
             console.error(error);
             showToast("Lỗi khi tải dữ liệu đơn hàng.", 'error');
         } else {
-            state.totalFilteredCount = count;
+            state.totalFilteredCount = count; 
             cache.donHangList = data;
-
+            
             renderDonHangTable(data);
             renderPagination('don-hang', count, from, to);
-            updateDonHangSelectionInfo();
+            updateDonHangSelectionInfo(); 
         }
-    } catch (err) {
+    } catch(err) {
         console.error("Fetch Don Hang failed:", err);
     } finally {
         if (showLoader) showLoading(false);
@@ -565,12 +565,12 @@ function renderDonHangTable(data) {
             const filesAsArray = parseFileArray(dh.file);
             const fileCount = filesAsArray.length;
 
-            const fileIcon = fileCount > 0 ?
+            const fileIcon = fileCount > 0 ? 
                 `<div class="relative cursor-pointer w-8 h-8 mx-auto">
                     <svg class="w-8 h-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
                     <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">${fileCount}</span>
                  </div>` : '';
-
+            
             let maKhoIcon = '';
             if (dh.ma_kho.includes('OUT')) {
                 maKhoIcon = `<svg class="w-4 h-4 inline-block ml-1 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>`;
@@ -622,7 +622,7 @@ function renderDonHangTable(data) {
                 </tr>
             `;
         }).join('');
-
+        
         // Sau khi render xong, kiểm tra xem ghi chú nào bị ẩn thì mới hiện nút "Xem thêm"
         checkNotesOverflow();
     } else {
@@ -682,7 +682,7 @@ function toggleDonHangModalColumns() {
 
     document.getElementById('don-hang-chi-tiet-loai-header')?.classList.toggle('hidden', isNhap);
     document.querySelectorAll('.chi-tiet-loai-cell').forEach(cell => cell.classList.toggle('hidden', isNhap));
-
+    
     document.getElementById('don-hang-fill-sl-all-btn')?.classList.toggle('hidden', !isNhap);
 
     const slHeaderTextEl = document.getElementById('don-hang-sl-header-text');
@@ -696,14 +696,14 @@ function renderChiTietTable() {
     const tbody = document.getElementById('don-hang-chi-tiet-body');
     const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
     const isViewMode = document.getElementById('save-don-hang-btn').classList.contains('hidden');
-
+    
     const runningTotalsMap = new Map();
     const seenCountsMap = new Map();
 
     tbody.innerHTML = chiTietItems.filter(Boolean).map((item, index) => {
         const maVach = item.ma_vach;
         const actualStock = item.tonKhoData?.ton_cuoi || 0;
-
+        
         const initialTotalForThisMaVach = initialChiTietItems
             .filter(initItem => initItem.ma_vach === maVach && maVach)
             .reduce((sum, initItem) => sum + (parseFloat(initItem.sl) || 0), 0);
@@ -826,7 +826,7 @@ function handleSmartTabNavigation(event) {
     if (isShift) return; // Để mặc định cho Shift+Tab
 
     const lotPopover = document.getElementById('lot-selector-popover');
-    const autocompletePopover = document.querySelector('.absolute.z-40.bg-white.border');
+    const autocompletePopover = document.querySelector('.absolute.z-40.bg-white.border'); 
 
     if (lotPopover) {
         const firstOption = lotPopover.querySelector('.lot-option');
@@ -843,7 +843,7 @@ function handleSmartTabNavigation(event) {
         if (firstOption) {
             event.preventDefault();
             firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
+            
             if (input.dataset.col) {
                 focusNextRowInput(input);
             } else {
@@ -876,7 +876,7 @@ function focusNextRowInput(currentInput) {
     const currentRow = currentInput.closest('tr.chi-tiet-row');
     if (!currentRow) return;
 
-    const nextRow = currentRow.nextElementSibling?.nextElementSibling;
+    const nextRow = currentRow.nextElementSibling?.nextElementSibling; 
     if (nextRow && nextRow.classList.contains('chi-tiet-row')) {
         const nextInput = nextRow.querySelector(`[data-col="${currentCol}"]`);
         if (nextInput) {
@@ -898,7 +898,7 @@ function openLotSelectorPopover(inputElement, item) {
     const popover = popoverContent.querySelector('div');
     popover.id = 'lot-selector-popover';
     popover.style.width = `380px`;
-    popover.classList.remove('max-h-60');
+    popover.classList.remove('max-h-60'); 
 
     const rect = inputElement.getBoundingClientRect();
     popover.style.left = `${rect.left}px`;
@@ -916,15 +916,15 @@ function openLotSelectorPopover(inputElement, item) {
         </div>
     `;
     popover.prepend(searchWrapper);
-
+    
     const searchInput = searchWrapper.querySelector('.lot-search-input');
     const optionsList = popover.querySelector('.autocomplete-options-list');
     optionsList.classList.add('max-h-64', 'overflow-y-auto');
 
     const renderOptions = (searchTerm = '') => {
         const lowerSearch = searchTerm.toLowerCase();
-        const filteredOptions = (item.lotOptions || []).filter(opt =>
-            (opt.lot || '').toLowerCase().includes(lowerSearch) ||
+        const filteredOptions = (item.lotOptions || []).filter(opt => 
+            (opt.lot || '').toLowerCase().includes(lowerSearch) || 
             (opt.date || '').toLowerCase().includes(lowerSearch)
         );
 
@@ -981,7 +981,7 @@ function openLotSelectorPopover(inputElement, item) {
     renderOptions('');
 
     searchInput.addEventListener('input', (e) => renderOptions(e.target.value));
-
+    
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
             const firstOption = optionsList.querySelector('.lot-option');
@@ -1005,7 +1005,7 @@ function openLotSelectorPopover(inputElement, item) {
             item.ten_vt = selectedOptionData.ten_vt;
             item.nganh = selectedOptionData.nganh;
             item.phu_trach = selectedOptionData.phu_trach;
-            item.pendingData = selectedOptionData.pendingData;
+            item.pendingData = selectedOptionData.pendingData; 
             item.ma_vach_valid = true;
 
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
@@ -1032,9 +1032,9 @@ function openLotSelectorPopover(inputElement, item) {
             closeActiveLotPopover();
         }
     };
-
+    
     setTimeout(() => document.addEventListener('click', closeHandler), 0);
-
+    
     activeLotPopover = { element: popover, closeHandler: closeHandler };
 }
 
@@ -1056,7 +1056,7 @@ function updateDonHangActionButtonsState() {
     const printBtn = document.getElementById('don-hang-btn-print');
     const msgBtn = document.getElementById('don-hang-btn-msg');
     const shipBtn = document.getElementById('don-hang-btn-shipping');
-
+    
     // Kiểm tra xem có đơn nào đã hoàn thành trong số các đơn đã chọn không
     const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
     const hasCompletedOrder = selectedOrders.some(dh => dh.ma_nx && !dh.ma_nx.endsWith('-'));
@@ -1065,7 +1065,7 @@ function updateDonHangActionButtonsState() {
     if (deleteBtn) deleteBtn.disabled = selectedCount === 0 || hasCompletedOrder;
     if (msgBtn) msgBtn.disabled = selectedCount === 0;
     if (shipBtn) shipBtn.disabled = selectedCount === 0;
-
+    
     const isPrintDisabled = selectedCount !== 1;
     if (printBtn) printBtn.disabled = isPrintDisabled;
 
@@ -1083,7 +1083,7 @@ async function handleExportMessage() {
     if (selectedIds.length === 0) return;
 
     const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
-
+    
     currentExportBlocks = [];
     let counter = 1;
 
@@ -1100,15 +1100,14 @@ async function handleExportMessage() {
         parts.forEach(part => {
             const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
             const slMatch = part.match(slRegex);
-
+            
             let slText = '... Kiện';
             let guiText = part;
 
             if (slMatch) {
                 slText = slMatch[1].trim() + ' Kiện';
                 guiText = part.replace(slMatch[0], '').trim();
-                // Loại bỏ "Gửi :" nếu có ở đầu để tránh lặp lại (hỗ trợ cả có/không dấu hai chấm)
-                guiText = guiText.replace(/^(Gửi\s*:?\s*)+/i, '').replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
+                guiText = guiText.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
             }
 
             currentExportBlocks.push({
@@ -1223,23 +1222,23 @@ function renderExportBlocks() {
     updateExportTextarea();
 }
 
-window.startEditExportBlock = function (index) {
+window.startEditExportBlock = function(index) {
     currentExportBlocks[index].isEditing = true;
     renderExportBlocks();
 };
 
-window.cancelEditExportBlock = function (index) {
+window.cancelEditExportBlock = function(index) {
     currentExportBlocks[index].isEditing = false;
     renderExportBlocks();
 };
 
-window.saveExportBlock = function (index) {
+window.saveExportBlock = function(index) {
     const ma_nx = document.getElementById(`edit-ma-nx-${index}`).value.trim();
     const team = document.getElementById(`edit-team-${index}`).value.trim();
     const muc_dich = document.getElementById(`edit-muc-dich-${index}`).value.trim();
     const guiText = document.getElementById(`edit-guiText-${index}`).value.trim();
     let slRaw = document.getElementById(`edit-slText-${index}`).value.trim();
-
+    
     // Tự động thêm "Kiện" nếu là số
     let slText = slRaw;
     if (slRaw && !isNaN(slRaw)) {
@@ -1260,12 +1259,12 @@ window.saveExportBlock = function (index) {
     renderExportBlocks();
 };
 
-window.removeExportBlock = function (index) {
+window.removeExportBlock = function(index) {
     currentExportBlocks.splice(index, 1);
     renderExportBlocks();
 };
 
-window.addExportBlock = function () {
+window.addExportBlock = function() {
     currentExportBlocks.push({
         checked: true,
         isEditing: true, // Mở chế độ sửa ngay lập tức
@@ -1282,10 +1281,10 @@ window.addExportBlock = function () {
     setTimeout(() => listContainer.scrollTop = listContainer.scrollHeight, 50);
 };
 
-window.toggleExportBlock = function (index) {
+window.toggleExportBlock = function(index) {
     currentExportBlocks[index].checked = !currentExportBlocks[index].checked;
     renderExportBlocks();
-
+    
     // Cập nhật trạng thái nút "Chọn tất cả"
     const allChecked = currentExportBlocks.every(b => b.checked);
     document.getElementById('msg-export-select-all').checked = allChecked;
@@ -1294,10 +1293,10 @@ window.toggleExportBlock = function (index) {
 function updateExportTextarea() {
     const contentArea = document.getElementById('msg-export-content');
     const checkedBlocks = currentExportBlocks.filter(b => b.checked);
-
+    
     let counter = 1;
     const text = checkedBlocks.map(block => {
-        let blockText = `(${counter}) ${block.ma_nx} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
+        let blockText = `(${counter}) ${block.ma_nx}${block.team ? ` | Team: ${block.team}` : ''} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
         blockText += `Nội dung : ${block.muc_dich}\n`;
         blockText += `Gửi : ${block.guiText}\n`;
         blockText += `Số Lượng : ${block.slText}\n`;
@@ -1305,7 +1304,7 @@ function updateExportTextarea() {
         counter++;
         return blockText;
     }).join('');
-
+    
     contentArea.value = text.trim();
 }
 
@@ -1356,7 +1355,7 @@ function generateMaNx(loai, nganh) {
  */
 async function fetchNextMaNxSuggestion(prefixPattern) {
     if (!prefixPattern || prefixPattern.length < 5) return null;
-
+    
     // Tìm mã lớn nhất bắt đầu bằng prefixPattern (không tính mã đang xử lý có gạch ngang cuối cùng nếu pattern không chứa gạch đó)
     const { data, error } = await sb
         .from('don_hang')
@@ -1397,19 +1396,19 @@ async function generateUniqueMaKho(loai) {
     statusEl.className = 'text-xs mt-1 h-4 text-gray-500';
 
     while (!isUnique && attempts < 10) {
-        generatedMaKho = generateMaKho(loai);
-        const { count, error } = await sb.from('don_hang').select('ma_kho', { count: 'exact', head: true }).eq('ma_kho', generatedMaKho);
-
-        if (error) {
-            statusEl.textContent = 'Lỗi kiểm tra';
-            statusEl.className = 'text-xs mt-1 h-4 text-red-600';
-            maKhoInput.classList.add('text-red-600');
-            return;
-        }
-        isUnique = count === 0;
-        attempts++;
+      generatedMaKho = generateMaKho(loai);
+      const { count, error } = await sb.from('don_hang').select('ma_kho', { count: 'exact', head: true }).eq('ma_kho', generatedMaKho);
+      
+      if (error) {
+        statusEl.textContent = 'Lỗi kiểm tra';
+        statusEl.className = 'text-xs mt-1 h-4 text-red-600';
+        maKhoInput.classList.add('text-red-600');
+        return;
+      }
+      isUnique = count === 0;
+      attempts++;
     }
-
+    
     maKhoInput.value = generatedMaKho;
     maKhoInput.classList.remove('text-red-600', 'bg-gray-200');
     maKhoInput.classList.add('text-green-600');
@@ -1435,7 +1434,7 @@ function updateGeneratedCodes() {
             generateUniqueMaKho(loai);
         }
     }
-
+    
     const newMaNx = generateMaNx(loai, nganh);
     if (maNxInput.value !== newMaNx) {
         maNxInput.value = newMaNx;
@@ -1448,7 +1447,7 @@ function renderFileList() {
     const isViewMode = document.getElementById('save-don-hang-btn').classList.contains('hidden');
 
     fileListContainer.innerHTML = '';
-
+    
     currentExistingFiles.forEach(url => {
         const fileName = decodeURIComponent(url.split('/').pop().split('?')[0].split('-').slice(1).join('-'));
         fileListContainer.innerHTML += `
@@ -1496,7 +1495,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
 
     const isViewMode = mode === 'view';
     const isEditOrAdd = !isViewMode;
-
+    
     form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = isViewMode);
     maNxInput.disabled = false;
 
@@ -1532,7 +1531,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                 nganhMap.set(item.nganh, item.phu_trach || '');
             }
         });
-        uniqueNganhList = Array.from(nganhMap, ([nganh, phu_trach]) => ({ nganh, phu_trach })).sort((a, b) => a.nganh.localeCompare(b.nganh));
+        uniqueNganhList = Array.from(nganhMap, ([nganh, phu_trach]) => ({ nganh, phu_trach })).sort((a,b) => a.nganh.localeCompare(b.nganh));
     }
 
     if (!yeuCauRes.error && yeuCauRes.data) {
@@ -1542,8 +1541,8 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     const nganhInput = document.getElementById('don-hang-modal-nganh');
     const handleNganhAutocomplete = () => {
         const inputValue = nganhInput.value.toLowerCase();
-        const suggestions = uniqueNganhList.filter(item =>
-            item.nganh.toLowerCase().includes(inputValue) ||
+        const suggestions = uniqueNganhList.filter(item => 
+            item.nganh.toLowerCase().includes(inputValue) || 
             (item.phu_trach && item.phu_trach.toLowerCase().includes(inputValue))
         );
         openAutocomplete(nganhInput, suggestions, {
@@ -1559,20 +1558,20 @@ export async function openDonHangModal(dh = null, mode = 'add') {
     };
     nganhInput.addEventListener('focus', handleNganhAutocomplete);
     nganhInput.addEventListener('input', debounce(handleNganhAutocomplete, 200));
-
+    
     nganhInput.addEventListener('input', (e) => {
         let val = e.target.value;
-        val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        val = val.replace(/đ/g, "d").replace(/Đ/g, "D");
-        e.target.value = val.toUpperCase();
+        val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+        val = val.replace(/đ/g, "d").replace(/Đ/g, "D"); 
+        e.target.value = val.toUpperCase(); 
     });
-
+    
     nganhInput.addEventListener('keydown', handleSmartTabNavigation);
 
     const yeuCauInput = document.getElementById('don-hang-modal-yeu-cau');
     const handleYeuCauAutocomplete = () => {
         const inputValue = yeuCauInput.value.toLowerCase();
-        const suggestions = uniqueYeuCauList.filter(item =>
+        const suggestions = uniqueYeuCauList.filter(item => 
             item.yeu_cau.toLowerCase().includes(inputValue)
         );
         openAutocomplete(yeuCauInput, suggestions, {
@@ -1594,10 +1593,10 @@ export async function openDonHangModal(dh = null, mode = 'add') {
 
         const today = new Date();
         document.getElementById('don-hang-modal-thoi-gian').valueAsDate = today;
-        document.getElementById('don-hang-modal-loai-don').value = isNhapTraMode ? 'Nhap' : '';
+        document.getElementById('don-hang-modal-loai-don').value = isNhapTraMode ? 'Nhap' : ''; 
         if (isNhapTraMode) document.getElementById('don-hang-modal-loai-don').disabled = true;
         updateGeneratedCodes();
-
+        
         initialDonHangData = {
             thoi_gian: today.toISOString().split('T')[0],
             loai_don: document.getElementById('don-hang-modal-loai-don').value,
@@ -1618,7 +1617,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             maNxOldInput.removeEventListener('focus', maNxOldInput._nhapTraFocus);
             maNxOldInput.removeEventListener('input', maNxOldInput._nhapTraInput);
         }
-
+        
         if (isNhapTraMode) {
             loaiDonLabel.innerHTML = 'Mã Xuất Cũ <span class="text-red-500 font-bold">*</span>';
             loaiDonSelect.classList.add('hidden');
@@ -1638,10 +1637,10 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                     renderChiTietTable();
                     updateGeneratedCodes();
                 }
-
+                
                 const list = await getUnreturnedMaNxList();
                 const suggestions = list.filter(i => i.ma_nx.toLowerCase().includes(inputValue) || (i.muc_dich || '').toLowerCase().includes(inputValue) || (i.yeu_cau || '').toLowerCase().includes(inputValue));
-
+                
                 openAutocomplete(maNxOldInput, suggestions, {
                     valueKey: 'ma_nx',
                     customHtml: (item) => `
@@ -1659,12 +1658,12 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                             document.getElementById('don-hang-modal-yeu-cau').value = selectedItem.yeu_cau || '';
                             document.getElementById('don-hang-modal-nganh').value = selectedItem.nganh || '';
                             document.getElementById('don-hang-modal-muc-dich').value = `Nhập trả từ ${selectedItem.ma_nx} - ${selectedItem.muc_dich || ''}`;
-
+                            
                             showLoading(true);
                             try {
                                 const { data: ctData } = await sb.from('chi_tiet').select('*').eq('ma_kho', selectedItem.ma_kho).eq('loai', 'Trưng Bày').order('stt', { ascending: true });
                                 chiTietItems = [];
-
+                                
                                 for (const ct of (ctData || [])) {
                                     const newItem = {
                                         id: `new-${Date.now()}-${Math.random()}`,
@@ -1673,8 +1672,8 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                                         ma_vach: ct.ma_vach,
                                         lot: ct.lot,
                                         date: ct.date,
-                                        yc_sl: ct.xuat,
-                                        sl: 0,
+                                        yc_sl: ct.xuat, 
+                                        sl: 0, 
                                         loai: 'Trưng Bày',
                                         pendingData: { nhap: 0, xuat: 0 },
                                         ma_vach_valid: true
@@ -1723,7 +1722,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         document.getElementById('don-hang-modal-title').textContent = isViewMode ? 'Xem Chi Tiết Đơn Hàng' : 'Sửa Đơn Hàng';
         document.getElementById('don-hang-edit-mode-ma-kho').value = dh.ma_kho;
         maKhoInput.readOnly = true;
-
+        
         const loaiDonLabel = document.getElementById('don-hang-modal-loai-don-label');
         const loaiDonSelect = document.getElementById('don-hang-modal-loai-don');
         const maNxOldInput = document.getElementById('don-hang-modal-ma-nx-old');
@@ -1731,7 +1730,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         loaiDonSelect.classList.remove('hidden');
         maNxOldInput.classList.add('hidden');
         maNxInput.placeholder = "";
-
+        
         Object.keys(dh).forEach(key => {
             const input = document.getElementById(`don-hang-modal-${key.replace(/_/g, '-')}`);
             if (input) {
@@ -1743,7 +1742,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             }
         });
         document.getElementById('don-hang-modal-loai-don').value = dh.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
-
+        
         debouncedValidateMaKho(dh.ma_kho);
         debouncedValidateMaNx(dh.ma_nx);
 
@@ -1756,13 +1755,13 @@ export async function openDonHangModal(dh = null, mode = 'add') {
             muc_dich: dh.muc_dich || '',
             ghi_chu: dh.ghi_chu || ''
         };
-
+        
         const filesFromDB = parseFileArray(dh.file);
         initialExistingFiles = [...filesFromDB];
         currentExistingFiles = [...filesFromDB];
 
         const fetchedChiTiet = await fetchChiTietDonHang(dh.ma_kho);
-
+        
         const maVtsInOrder = [...new Set(fetchedChiTiet.map(item => item.ma_vt).filter(Boolean))];
         let allMaVachsInOrder = [];
         if (maVtsInOrder.length > 0) {
@@ -1771,7 +1770,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                 allMaVachsInOrder = vachData.map(v => v.ma_vach);
             }
         }
-
+        
         const pendingAmounts = await getPendingAmountsByMaVach(allMaVachsInOrder, dh.ma_kho);
 
         const chiTietPromises = fetchedChiTiet.map(async (item) => {
@@ -1788,22 +1787,22 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                     const adjustedLotData = lotData.map(lot => {
                         return { ...lot, pendingData: pendingAmounts.get(lot.ma_vach) || { nhap: 0, xuat: 0 } };
                     });
-
+                    
                     lotOptions = adjustedLotData;
                     tonKhoData = adjustedLotData.find(opt => opt.ma_vach === item.ma_vach);
                 }
             }
-            return {
-                ...item,
+            return { 
+                ...item, 
                 sl: item.nhap || item.xuat,
-                originalQty: item.nhap || item.xuat,
+                originalQty: item.nhap || item.xuat, 
                 ma_vach_valid: true,
                 lotOptions: lotOptions,
                 tonKhoData: tonKhoData,
-                pendingData: currentPending
+                pendingData: currentPending 
             };
         });
-
+        
         chiTietItems = await Promise.all(chiTietPromises);
         initialChiTietItems = JSON.parse(JSON.stringify(chiTietItems));
     }
@@ -1816,7 +1815,7 @@ export async function openDonHangModal(dh = null, mode = 'add') {
 async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
     const itemsToAdd = [];
     const itemsToUpdate = [];
-
+    
     for (const item of chiTietItems) {
         if (!item) continue;
         if (!item.nganh && item.tonKhoData) item.nganh = item.tonKhoData.nganh;
@@ -1827,7 +1826,7 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
         if (!item) return;
         const baseData = {
             stt: index + 1,
-            id: item.id.toString().startsWith('new-') ? crypto.randomUUID() : item.id,
+            id: item.id.toString().startsWith('new-') ? crypto.randomUUID() : item.id, 
             ma_kho: ma_kho_don_hang,
             thoi_gian: donHangInfo.thoi_gian,
             ma_nx: donHangInfo.ma_nx,
@@ -1842,7 +1841,7 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
             loai: item.loai,
             yeu_cau: donHangInfo.yeu_cau,
             muc_dich: donHangInfo.muc_dich,
-            nganh: item.nganh,
+            nganh: item.nganh, 
             phu_trach: item.phu_trach,
         };
         if (item.id.toString().startsWith('new-')) {
@@ -1894,7 +1893,7 @@ async function saveOrderForOfflineSync() {
             nganh: getElValue('don-hang-modal-nganh', true),
             muc_dich: getElValue('don-hang-modal-muc-dich', true),
             ghi_chu: getElValue('don-hang-modal-ghi-chu', true),
-            file: []
+            file: [] 
         };
 
         const newFilesPromises = selectedDonHangFiles.map(async file => ({
@@ -1952,7 +1951,7 @@ async function handleSaveDonHang(e, printAction = null) {
             return;
         }
     }
-
+    
     if (chiTietItems.filter(Boolean).length === 0) {
         showToast('Phải có ít nhất một vật tư trong đơn hàng.', 'error');
         return;
@@ -1975,7 +1974,7 @@ async function handleSaveDonHang(e, printAction = null) {
         showToast('Mã Kho hoặc Mã NX không hợp lệ hoặc đang được kiểm tra.', 'error');
         return;
     }
-
+    
     showLoading(true);
     try {
         const ma_kho_orig = getElValue('don-hang-edit-mode-ma-kho');
@@ -2000,7 +1999,7 @@ async function handleSaveDonHang(e, printAction = null) {
                 return;
             }
         }
-
+        
         for (const key in donHangData) {
             if (typeof donHangData[key] === 'string' && donHangData[key].startsWith('__MISSING_ELEMENT_')) {
                 throw new Error(`Không thể lưu: Thiếu phần tử DOM cho trường ${key}.`);
@@ -2008,7 +2007,7 @@ async function handleSaveDonHang(e, printAction = null) {
         }
 
         const loai_don = getElValue('don-hang-modal-loai-don');
-
+        
         const filesToRemove = initialExistingFiles.filter(url => !currentExistingFiles.includes(url));
         if (filesToRemove.length > 0) {
             const filePathsToRemove = filesToRemove.map(url => {
@@ -2017,7 +2016,7 @@ async function handleSaveDonHang(e, printAction = null) {
                     return path ? decodeURIComponent(path) : null;
                 } catch (e) { console.error("Invalid URL for file deletion:", url, e); return null; }
             }).filter(Boolean);
-            if (filePathsToRemove.length > 0) await sb.storage.from('file_don_hang').remove(filePathsToRemove);
+            if(filePathsToRemove.length > 0) await sb.storage.from('file_don_hang').remove(filePathsToRemove);
         }
 
         let uploadedFileUrls = [];
@@ -2071,16 +2070,16 @@ async function handleSaveDonHang(e, printAction = null) {
         }
 
         showToast('Lưu đơn hàng thành công!', 'success');
-
+        
         if (printAction === 'print') {
             const isXuat = donHangData.ma_kho.startsWith('OUT');
             if (isXuat) {
                 showPrintChoiceModal(donHangData.ma_kho);
-            } else {
+            } else { 
                 openPrintPreviewModal(`print.html?ma_kho=${donHangData.ma_kho}`, `Phiếu Nhập Kho - ${donHangData.ma_kho}`);
             }
         }
-
+        
         forceCloseDonHangModal();
         const pageToFetch = isEdit ? viewStates['view-don-hang'].currentPage : 1;
         fetchDonHang(pageToFetch, false);
@@ -2089,7 +2088,7 @@ async function handleSaveDonHang(e, printAction = null) {
         else showToast(`Lỗi: ${error.message}`, 'error');
         console.error("Save error:", error);
     } finally {
-        if (!printAction) showLoading(false);
+        if (!printAction) showLoading(false); 
     }
 }
 
@@ -2163,7 +2162,7 @@ async function showDeleteVerifyModal() {
         cancelBtn1.onclick = () => cleanup(false);
         cancelBtn2.onclick = () => cleanup(false);
         confirmBtn.onclick = handleConfirm;
-
+        
         passwordInput.onkeydown = (e) => {
             if (e.key === 'Enter') handleConfirm();
         };
@@ -2180,12 +2179,12 @@ async function handleDeleteMultipleDonHang() {
     // Kiểm tra bảo mật: Không cho phép xóa đơn đã hoàn thành
     const selectedOrders = cache.donHangList.filter(dh => selectedIds.includes(dh.ma_kho));
     const hasCompletedOrder = selectedOrders.some(dh => dh.ma_nx && !dh.ma_nx.endsWith('-'));
-
+    
     if (hasCompletedOrder) {
         showToast("Không thể xóa đơn hàng đã hoàn thành.", "error");
         return;
     }
-
+    
     // Yêu cầu xác thực mật khẩu trước khi xóa
     const verified = await showDeleteVerifyModal();
     if (!verified) return;
@@ -2194,11 +2193,11 @@ async function handleDeleteMultipleDonHang() {
     try {
         await sb.from('chi_tiet').delete().in('ma_kho', selectedIds);
         for (const ma_kho of selectedIds) {
-            const { data: list, error } = await sb.storage.from('file_don_hang').list(ma_kho);
-            if (list && list.length > 0) {
+             const { data: list, error } = await sb.storage.from('file_don_hang').list(ma_kho);
+             if (list && list.length > 0) {
                 const filesToRemove = list.map(x => `${ma_kho}/${x.name}`);
                 await sb.storage.from('file_don_hang').remove(filesToRemove);
-            }
+             }
         }
         const { error: deleteError } = await sb.from('don_hang').delete().in('ma_kho', selectedIds);
         if (deleteError) throw deleteError;
@@ -2235,13 +2234,13 @@ async function updateItemFromMaVt(item, ma_vt) {
     } else if (lotData && lotData.length > 0) {
         const ma_kho_orig = document.getElementById('don-hang-edit-mode-ma-kho').value;
         const allMaVachs = lotData.map(l => l.ma_vach);
-
+        
         const pendingAmounts = await getPendingAmountsByMaVach(allMaVachs, ma_kho_orig);
 
         const adjustedLotData = lotData.map(lot => {
             return { ...lot, pendingData: pendingAmounts.get(lot.ma_vach) || { nhap: 0, xuat: 0 } };
         });
-
+        
         item.lotOptions = adjustedLotData;
         item.ten_vt = adjustedLotData[0]?.ten_vt || '';
     } else {
@@ -2311,9 +2310,9 @@ function hasDonHangChanges() {
         const initialChiTietItemsFiltered = initialChiTietItems.map(getComparableItem);
         const currentChiTietItemsFiltered = chiTietItems.map(getComparableItem);
         if (JSON.stringify(initialChiTietItemsFiltered) !== JSON.stringify(currentChiTietItemsFiltered)) return true;
-    } catch (e) {
+    } catch(e) {
         console.error("Error comparing chi tiet items:", e);
-        return true;
+        return true; 
     }
 
     return false;
@@ -2343,23 +2342,19 @@ export function initDonHangView() {
     const viewContainer = document.getElementById('view-don-hang');
     const isAdminOrUser = currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User';
     viewContainer.querySelectorAll('.dh-admin-only').forEach(el => el.classList.toggle('hidden', !isAdminOrUser));
-
+    
     const triggerFetch = debounce(() => fetchDonHang(1), 500);
-
+    
     document.getElementById('don-hang-search').addEventListener('input', e => {
-        viewStates['view-don-hang'].searchTerm = e.target.value; triggerFetch();
-    });
+        viewStates['view-don-hang'].searchTerm = e.target.value; triggerFetch(); });
     document.getElementById('don-hang-filter-from-date').addEventListener('change', e => {
-        viewStates['view-don-hang'].filters.from_date = e.target.value; fetchDonHang(1);
-    });
+        viewStates['view-don-hang'].filters.from_date = e.target.value; fetchDonHang(1); });
     document.getElementById('don-hang-filter-to-date').addEventListener('change', e => {
-        viewStates['view-don-hang'].filters.to_date = e.target.value; fetchDonHang(1);
-    });
+        viewStates['view-don-hang'].filters.to_date = e.target.value; fetchDonHang(1); });
 
-    viewContainer.addEventListener('click', e => {
+     viewContainer.addEventListener('click', e => {
         const btn = e.target.closest('.filter-btn');
-        if (btn) openDonHangFilterPopover(btn, 'view-don-hang');
-    });
+        if (btn) openDonHangFilterPopover(btn, 'view-don-hang'); });
 
     document.getElementById('don-hang-reset-filters').addEventListener('click', () => {
         const state = viewStates['view-don-hang'];
@@ -2369,15 +2364,14 @@ export function initDonHangView() {
         state.searchTerm = '';
         state.filters = { from_date: '', to_date: '', loai: [], trang_thai_xu_ly: [], ma_kho: [], ma_nx: [], yeu_cau: [], nganh: [] };
         viewContainer.querySelectorAll('#view-don-hang .filter-btn').forEach(btn => {
-            btn.textContent = filterButtonDefaultTexts[btn.id];
-        });
+            btn.textContent = filterButtonDefaultTexts[btn.id]; });
         fetchDonHang(1);
     });
 
     document.getElementById('don-hang-table-body').addEventListener('click', async e => {
         const row = e.target.closest('tr'); if (!row || !row.dataset.id) return;
         const id = row.dataset.id;
-
+        
         if (e.target.closest('.ma-kho-cell')) {
             const optimisticData = cache.donHangList.find(dh => dh.ma_kho === id);
             if (!optimisticData) return;
@@ -2386,9 +2380,9 @@ export function initDonHangView() {
                 showToast("Bạn không có quyền xem chi tiết đơn hàng này.", 'error');
                 return;
             }
-
+            
             openDonHangModal(optimisticData, 'view');
-
+            
             sb.from('don_hang').select('*').eq('ma_kho', id).single().then(({ data: freshData }) => {
                 if (freshData && document.getElementById('don-hang-edit-mode-ma-kho').value === id) {
                     openDonHangModal(freshData, 'view');
@@ -2410,16 +2404,16 @@ export function initDonHangView() {
         document.querySelectorAll('.don-hang-select-row').forEach(cb => {
             const row = cb.closest('tr');
             if (row && cb.checked !== isChecked) {
-                cb.checked = isChecked;
-                const id = row.dataset.id;
-                viewStates['view-don-hang'].selected[isChecked ? 'add' : 'delete'](id);
-                row.classList.toggle('bg-blue-100', isChecked);
+                 cb.checked = isChecked;
+                 const id = row.dataset.id;
+                 viewStates['view-don-hang'].selected[isChecked ? 'add' : 'delete'](id);
+                 row.classList.toggle('bg-blue-100', isChecked);
             }
         });
         updateDonHangActionButtonsState();
         updateDonHangSelectionInfo();
     });
-
+    
     document.getElementById('don-hang-btn-add').addEventListener('click', () => openDonHangModal(null, 'add'));
     document.getElementById('don-hang-btn-nhap-tra').addEventListener('click', () => openDonHangModal(null, 'nhap-tra'));
     document.getElementById('don-hang-btn-edit').addEventListener('click', () => {
@@ -2430,14 +2424,14 @@ export function initDonHangView() {
         }
     });
     document.getElementById('don-hang-btn-delete').addEventListener('click', handleDeleteMultipleDonHang);
-
+    
     document.getElementById('don-hang-btn-print').addEventListener('click', () => {
         const selectedIds = [...viewStates['view-don-hang'].selected];
         if (selectedIds.length === 1) {
             const ma_kho = selectedIds[0];
             if (ma_kho.startsWith('IN')) {
                 openPrintPreviewModal(`print.html?ma_kho=${ma_kho}`, `Phiếu Nhập Kho - ${ma_kho}`);
-            } else {
+            } else { 
                 showPrintChoiceModal(ma_kho);
             }
         }
@@ -2450,7 +2444,7 @@ export function initDonHangView() {
             if (ma_kho) {
                 if (ma_kho.startsWith('IN')) {
                     openPrintPreviewModal(`print.html?ma_kho=${ma_kho}`, `Phiếu Nhập Kho - ${ma_kho}`);
-                } else {
+                } else { 
                     showPrintChoiceModal(ma_kho);
                 }
             }
@@ -2476,7 +2470,7 @@ export function initDonHangView() {
 
     document.getElementById('cancel-don-hang-btn').addEventListener('click', closeDonHangModalWithConfirm);
     document.getElementById('close-don-hang-view-btn').addEventListener('click', closeDonHangModalWithConfirm);
-
+    
     document.getElementById('save-don-hang-btn').addEventListener('click', (e) => handleSaveDonHang(e, null));
     document.getElementById('save-and-print-btn').addEventListener('click', (e) => handleSaveDonHang(e, 'print'));
 
@@ -2501,7 +2495,7 @@ export function initDonHangView() {
     // Chức năng cho cột Ghi Chú: Tự động điền 'Số Lượng : ' và thông minh hóa việc điền
     const ghiChuInput = document.getElementById('don-hang-modal-ghi-chu');
     if (ghiChuInput) {
-        ghiChuInput.addEventListener('focus', function () {
+        ghiChuInput.addEventListener('focus', function() {
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
             if (loaiDon === 'Nhap') return;
             if (!this.value.trim()) {
@@ -2511,7 +2505,7 @@ export function initDonHangView() {
             }
         });
 
-        ghiChuInput.addEventListener('keydown', function (e) {
+        ghiChuInput.addEventListener('keydown', function(e) {
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
             if (loaiDon === 'Nhap') return;
 
@@ -2532,12 +2526,12 @@ export function initDonHangView() {
                     } else if (!slRaw) {
                         slText = '1 Kiện';
                     }
-
+                    
                     const before = text.substring(0, lastLineStart);
                     const after = text.substring(start);
                     const newLine = `Số Lượng : ${slText}\nGửi : `;
                     this.value = before + newLine + after;
-
+                    
                     const newPos = before.length + newLine.length;
                     this.setSelectionRange(newPos, newPos);
                 }
@@ -2554,7 +2548,7 @@ export function initDonHangView() {
             }
         });
 
-        ghiChuInput.addEventListener('input', function () {
+        ghiChuInput.addEventListener('input', function() {
             const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
             if (loaiDon === 'Nhap') return;
 
@@ -2569,7 +2563,7 @@ export function initDonHangView() {
                 if (slPart.length > 0 && !/^[0-9.,]*$/.test(slPart) && !slPart.endsWith('Kiện')) {
                     const lastChar = slPart.slice(-1);
                     const slNum = slPart.slice(0, -1).trim() || '1';
-
+                    
                     const before = text.substring(0, lastLineStart);
                     const after = text.substring(start);
                     const newLine = `Số Lượng : ${slNum} Kiện\nGửi : ${lastChar}`;
@@ -2620,7 +2614,7 @@ export function initDonHangView() {
 
             let counter = 1;
             const copyText = checkedBlocks.map(block => {
-                let blockText = `(${counter}) ${block.ma_nx} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
+                let blockText = `(${counter}) ${block.ma_nx}${block.team ? ` | Team: ${block.team}` : ''} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
                 // KHÔNG bao gồm Nội dung khi copy theo yêu cầu người dùng
                 blockText += `Gửi : ${block.guiText}\n`;
                 blockText += `Số Lượng : ${block.slText}\n`;
@@ -2630,7 +2624,7 @@ export function initDonHangView() {
             }).join('').trim();
 
             navigator.clipboard.writeText(copyText).then(() => {
-                showToast('Đã copy tin nhắn !', 'success');
+                showToast('Đã copy tin nhắn (đã loại bỏ phần Nội dung)!', 'success');
             }).catch(err => {
                 showToast('Lỗi khi copy: ' + err, 'error');
             });
@@ -2644,7 +2638,7 @@ export function initDonHangView() {
             if (!contentArea.value) return;
 
             sessionStorage.setItem('custom_shipping_info_text', contentArea.value);
-
+            
             // Nạp URL vào iframe ẩn để hiện hộp thoại in mà không cần mở tab mới
             const printIframe = document.getElementById('print-iframe');
             if (printIframe) {
@@ -2678,7 +2672,7 @@ export function initDonHangView() {
     document.getElementById('don-hang-modal-nganh').addEventListener('input', debounce(updateGeneratedCodes, 300));
 
     const dropArea = document.getElementById('don-hang-file-drop-area');
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }));
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropArea.addEventListener(ev, e => {e.preventDefault(); e.stopPropagation();}));
     ['dragenter', 'dragover'].forEach(ev => dropArea.addEventListener(ev, () => dropArea.classList.add('border-indigo-500', 'bg-gray-100')));
     ['dragleave', 'drop'].forEach(ev => dropArea.addEventListener(ev, () => dropArea.classList.remove('border-indigo-500', 'bg-gray-100')));
     dropArea.addEventListener('drop', e => handleFileSelection(e.dataTransfer.files));
@@ -2697,7 +2691,7 @@ export function initDonHangView() {
     });
 
     const chiTietBody = document.getElementById('don-hang-chi-tiet-body');
-    if (chiTietBody) {
+    if(chiTietBody) {
         if (chiTietSortable) chiTietSortable.destroy();
         chiTietSortable = new Sortable(chiTietBody, {
             animation: 150,
@@ -2736,7 +2730,7 @@ export function initDonHangView() {
             const targetRow = targetInput.closest('tr.chi-tiet-row');
             const targetId = targetRow.dataset.id;
             const targetField = targetInput.dataset.field;
-
+            
             const startIndex = chiTietItems.findIndex(item => item && item.id == targetId);
             if (startIndex === -1) {
                 return;
@@ -2813,7 +2807,7 @@ export function initDonHangView() {
     document.getElementById('don-hang-fill-sl-all-btn').addEventListener('click', () => {
         const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
         if (loaiDon !== 'Nhap' || chiTietItems.length === 0) return;
-
+    
         chiTietItems.forEach(item => {
             if (item) {
                 item.sl = item.yc_sl || 0;
@@ -2838,7 +2832,7 @@ export function initDonHangView() {
             const row = lotInput.closest('tr');
             const id = row.dataset.id;
             const item = chiTietItems.find(i => i && i.id == id);
-            if (item) {
+            if(item) {
                 openLotSelectorPopover(lotInput, item);
             }
         }
@@ -2847,7 +2841,7 @@ export function initDonHangView() {
     chiTietBody.addEventListener('change', (e) => {
         const input = e.target;
         if (!input.classList.contains('chi-tiet-input')) return;
-
+        
         const row = input.closest('tr');
         if (!row) return;
         const id = row.dataset.id;
@@ -2858,16 +2852,16 @@ export function initDonHangView() {
         if (item) {
             const oldValue = item[field];
             item[field] = value;
-
+            
             if (field === 'yc_sl') {
-                if (value <= 0) {
+                if(value <= 0) {
                     showToast('Yêu cầu (Y/c) phải lớn hơn 0.', 'error');
                     item.yc_sl = oldValue || 1;
                 }
             } else if (field === 'sl') {
                 const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
                 const actualStock = item.tonKhoData?.ton_cuoi || 0;
-
+                
                 const initialTotalForThisMaVach = initialChiTietItems
                     .filter(initItem => initItem.ma_vach === item.ma_vach && item.ma_vach)
                     .reduce((sum, initItem) => sum + (parseFloat(initItem.sl) || 0), 0);
@@ -2883,21 +2877,21 @@ export function initDonHangView() {
                     .filter(i => i && i.ma_vach === item.ma_vach && item.ma_vach)
                     .reduce((sum, i) => sum + (parseFloat(i.sl) || 0), 0);
 
-                if (value < 0) {
+                 if (value < 0) {
                     showToast('Số lượng (SL) không được âm.', 'error');
                     item.sl = oldValue || 0;
-                } else if (item.yc_sl && value > item.yc_sl) {
+                 } else if (item.yc_sl && value > item.yc_sl) {
                     showToast('Số lượng (SL) không được lớn hơn Yêu cầu (Y/c).', 'error');
                     item.sl = oldValue || item.yc_sl;
-                } else if (loaiDon === 'Xuat' && currentTotalInUI > stockBeforeThisOrder) {
+                 } else if (loaiDon === 'Xuat' && currentTotalInUI > stockBeforeThisOrder) {
                     showToast(`Tổng số lượng xuất (${currentTotalInUI}) vượt quá tồn kho (${stockBeforeThisOrder}).`, 'error');
                     item.sl = oldValue !== undefined ? oldValue : 0;
-                }
+                 }
             }
             renderChiTietTable();
         }
     });
-
+    
     chiTietBody.addEventListener('input', debounce(async (e) => {
         const input = e.target;
         if (input.classList.contains('chi-tiet-input') && input.dataset.field === 'ma_vt') {
@@ -2910,11 +2904,11 @@ export function initDonHangView() {
         if (input.classList.contains('chi-tiet-tray-input')) {
             // Ngăn chặn sự kiện click lan lên document làm đóng popover vừa mở
             e.stopPropagation();
-
+            
             const list = await getTrayList();
             const inputVal = input.value.toLowerCase();
             const suggestions = list.filter(t => t.tray.toLowerCase().includes(inputVal));
-
+            
             if (suggestions.length) {
                 openAutocomplete(input, suggestions, {
                     valueKey: 'tray',
@@ -2922,7 +2916,7 @@ export function initDonHangView() {
                     width: `${Math.max(input.offsetWidth, 150)}px`,
                     // Thiết lập chiều cao để hiển thị tầm 5 mục và cho phép cuộn
                     customStyles: {
-                        maxHeight: '180px',
+                        maxHeight: '180px', 
                         overflowY: 'auto'
                     },
                     onSelect: (val) => {
@@ -2990,8 +2984,7 @@ export function initDonHangView() {
     chiTietBody.addEventListener('keydown', handleSmartTabNavigation);
 
     document.getElementById('don-hang-items-per-page').addEventListener('change', (e) => {
-        viewStates['view-don-hang'].itemsPerPage = parseInt(e.target.value, 10); fetchDonHang(1);
-    });
+        viewStates['view-don-hang'].itemsPerPage = parseInt(e.target.value, 10); fetchDonHang(1); });
     document.getElementById('don-hang-prev-page').addEventListener('click', () => fetchDonHang(viewStates['view-don-hang'].currentPage - 1));
     document.getElementById('don-hang-next-page').addEventListener('click', () => fetchDonHang(viewStates['view-don-hang'].currentPage + 1));
     const pageInput = document.getElementById('don-hang-page-input');
@@ -3004,15 +2997,15 @@ export function initDonHangView() {
         pageInput.value = targetPage;
         if (targetPage !== state.currentPage) fetchDonHang(targetPage);
     };
-    pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); } });
+    pageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }});
     pageInput.addEventListener('change', handlePageJump);
-
+    
     attachDonHangTableListeners();
 }
 
 export async function executeSaveOrderJob(payload) {
     const { isEdit, ma_kho_orig, donHangData, newFiles, initialExistingFiles, currentExistingFiles } = payload;
-
+    
     chiTietItems = payload.chiTietItems;
     initialChiTietItems = payload.initialChiTietItems;
 
@@ -3024,7 +3017,7 @@ export async function executeSaveOrderJob(payload) {
                 return path ? decodeURIComponent(path) : null;
             } catch (e) { console.error("Invalid URL for file deletion:", url, e); return null; }
         }).filter(Boolean);
-        if (filePathsToRemove.length > 0) await sb.storage.from('file_don_hang').remove(filePathsToRemove);
+        if(filePathsToRemove.length > 0) await sb.storage.from('file_don_hang').remove(filePathsToRemove);
     }
 
     let uploadedFileUrls = [];
@@ -3054,7 +3047,7 @@ export async function executeSaveOrderJob(payload) {
 
     const loai_don = donHangData.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
     await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
-} async function updateDonHangField(ma_kho, field, value) {
+}async function updateDonHangField(ma_kho, field, value) {
     const dh = cache.donHangList.find(item => item.ma_kho === ma_kho);
     if (!dh || dh[field] === value) {
         renderDonHangTable(cache.donHangList);
@@ -3089,7 +3082,7 @@ function enterInlineEditMode(cell) {
     const currentValue = dh ? dh[field] : '';
 
     cell.classList.add('bg-blue-50', 'z-10');
-
+    
     let inputHtml = '';
     if (field === 'ma_nx') {
         inputHtml = `
@@ -3118,10 +3111,10 @@ function enterInlineEditMode(cell) {
     `;
 
     const input = cell.querySelector('input, textarea');
-
+    
     // NÂNG CẤP: Logic thông minh cho Ghi chú (giống trong form)
     if (field === 'ghi_chu') {
-        input.addEventListener('focus', function () {
+        input.addEventListener('focus', function() {
             if (dh && dh.loai_don === 'Nhap') return;
             if (!this.value.trim()) {
                 this.value = 'Số Lượng : ';
@@ -3130,7 +3123,7 @@ function enterInlineEditMode(cell) {
             }
         });
 
-        input.addEventListener('keydown', function (e) {
+        input.addEventListener('keydown', function(e) {
             if (dh && dh.loai_don === 'Nhap') return;
             if (e.key === 'Enter' && !e.shiftKey) {
                 const start = this.selectionStart;
@@ -3145,7 +3138,7 @@ function enterInlineEditMode(cell) {
                     if (slRaw && !isNaN(slRaw.replace(',', '.'))) slText = slRaw + ' Kiện';
                     else if (slRaw && !slRaw.endsWith('Kiện')) slText = slRaw + ' Kiện';
                     else if (!slRaw) slText = '1 Kiện';
-
+                    
                     const before = text.substring(0, lastLineStart);
                     const after = text.substring(start);
                     const newLine = `Số Lượng : ${slText}\nGửi : `;
@@ -3166,7 +3159,7 @@ function enterInlineEditMode(cell) {
             }
         });
 
-        input.addEventListener('input', function () {
+        input.addEventListener('input', function() {
             if (dh && dh.loai_don === 'Nhap') return;
             const start = this.selectionStart;
             const text = this.value;
@@ -3189,7 +3182,7 @@ function enterInlineEditMode(cell) {
         });
     } else if (field === 'ma_nx') {
         const statusEl = cell.querySelector('.inline-ma-nx-status');
-
+        
         const fetchSuggestion = debounce(async (val) => {
             if (!val || !val.endsWith('-')) {
                 statusEl.textContent = '';
@@ -3227,7 +3220,7 @@ function enterInlineEditMode(cell) {
                 }
             }
         });
-
+        
         fetchSuggestion(input.value);
     }
 
@@ -3242,43 +3235,43 @@ function enterInlineEditMode(cell) {
 
     cell.querySelector('.cancel-inline-btn').onclick = (e) => {
         e.stopPropagation();
-        renderDonHangTable(cache.donHangList);
+        renderDonHangTable(cache.donHangList); 
     };
-
+    
     // Chặn sự kiện click để không bị chọn dòng khi đang sửa
     cell.onclick = (e) => e.stopPropagation();
 }
 
 async function handleInlineFileDrop(files, ma_kho) {
     if (!files || files.length === 0) return;
-
+    
     showLoading(true);
     try {
         const { data: currentDh, error: fetchError } = await sb.from('don_hang').select('file').eq('ma_kho', ma_kho).single();
         if (fetchError) throw fetchError;
-
+        
         const existingFiles = parseFileArray(currentDh.file);
         const uploadedUrls = [];
-
+        
         for (const file of Array.from(files)) {
             const safeFileName = sanitizeFileName(file.name);
             const filePath = `${ma_kho}/${Date.now()}-${safeFileName}`;
             const { data, error: uploadError } = await sb.storage.from('file_don_hang').upload(filePath, file);
             if (uploadError) throw uploadError;
-
+            
             const { data: urlData } = sb.storage.from('file_don_hang').getPublicUrl(data.path);
             uploadedUrls.push(urlData.publicUrl);
         }
-
+        
         const newFiles = [...existingFiles, ...uploadedUrls];
         const { error: updateError } = await sb.from('don_hang').update({ file: newFiles }).eq('ma_kho', ma_kho);
         if (updateError) throw updateError;
-
+        
         showToast(`Đã tải lên ${files.length} file cho đơn ${ma_kho}`, 'success');
-
+        
         const dh = cache.donHangList.find(item => item.ma_kho === ma_kho);
         if (dh) dh.file = newFiles;
-
+        
         renderDonHangTable(cache.donHangList);
     } catch (error) {
         showToast(`Lỗi tải file: ${error.message}`, 'error');
@@ -3328,7 +3321,7 @@ export function attachDonHangTableListeners() {
             e.preventDefault();
             e.stopPropagation();
             cell.classList.remove('bg-blue-100');
-
+            
             const ma_kho = cell.closest('tr').dataset.id;
             const files = e.dataTransfer.files;
             handleInlineFileDrop(files, ma_kho);
@@ -3349,11 +3342,11 @@ export function attachDonHangTableListeners() {
 // Tự động gọi khi load module
 setTimeout(attachDonHangTableListeners, 500);
 
-window.toggleNote = function (btn) {
+window.toggleNote = function(btn) {
     const container = btn.closest('.note-container');
     const isExpanded = container.classList.toggle('expanded');
     btn.textContent = isExpanded ? 'Ẩn bớt' : 'Xem thêm';
-
+    
     // Nếu thu gọn lại, cuộn dòng đó lên đầu tầm mắt nếu cần (optional)
     if (!isExpanded) {
         container.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
