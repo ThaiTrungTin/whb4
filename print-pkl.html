@@ -165,10 +165,24 @@
 
             body.printing-labels #label-area>div {
                 margin-left: 8mm; /* Tăng lên 8mm (5mm cũ + 3mm bù trừ) để không cần chỉnh lề thủ công */
-                margin-top: 2mm;
+                margin-top: 1.5mm;
             }
 
-            /* Tăng kích thước Phiếu Vận Chuyển để bù cho tỉ lệ in 65% */
+            /* Từ trang thứ 2 trở đi, tăng lề trên gấp 3 (4.5mm) để tránh bị hẹp lề */
+            body.printing-labels #label-area>div:nth-child(n+2) {
+                margin-top: 4.5mm;
+            }
+
+            .label-item,
+            .shipping-label {
+                page-break-after: always !important;
+                break-after: page !important;
+            }
+
+            body.printing-labels .label-item {
+                margin-bottom: 0;
+            }
+            
             body.printing-shipping .shipping-label {
                 transform: scale(1.38) !important;
                 transform-origin: top left;
@@ -299,6 +313,7 @@
                             title="Chọn tất cả để in hàng loạt">
                     </th>
                     <th class="border border-black p-1 text-center no-print" style="width: 5%;">Tem</th>
+                    <th class="border border-black p-1 text-center no-print" style="width: 4%;">Ghép</th>
                 </tr>
             </thead>
             <tbody id="chi-tiet-table-body"></tbody>
@@ -432,6 +447,9 @@
                     window.globalCtData = ctData;
                 }
 
+                // Tự động ghép các mặt hàng thỏa điều kiện (cùng mã VT, tối đa 4 dòng)
+                window.autoMergeLabels();
+
                 renderA4();
                 setupRealtimeSubscription(maKhoList);
 
@@ -458,14 +476,32 @@
             document.getElementById('info-yeu-cau').textContent = dhData.yeu_cau;
             document.getElementById('info-nganh').textContent = dhData.nganh;
             document.getElementById('info-muc-dich').textContent = dhData.muc_dich || 'Không có';
-            new QRCode(document.getElementById("qrcode"), { text: window.location.href, width: 64, height: 64 });
+            const qrContainer = document.getElementById("qrcode");
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, { text: window.location.href, width: 64, height: 64 });
 
             const tableBody = document.getElementById('chi-tiet-table-body');
             const isXuat = dhData.ma_kho.startsWith('OUT');
             let totalSl = 0;
             let totalYcsl = 0;
 
+            // Tính toán số thứ tự cho các nhóm ghép (ví dụ: Nhóm 1, Nhóm 2...)
+            const groupNumbers = {};
+            let nextGroupNum = 1;
+            window.globalCtData.forEach(item => {
+                if (item.mergedGroupId && !groupNumbers[item.mergedGroupId]) {
+                    groupNumbers[item.mergedGroupId] = nextGroupNum++;
+                }
+            });
+
             tableBody.innerHTML = ctData.map((item, index) => {
+                const nextItem = ctData[index + 1];
+                const prevItem = ctData[index - 1];
+                
+                // Hiển thị icon ghép nếu mã VT trùng với dòng dưới
+                const canMergeWithNext = nextItem && nextItem.ma_vt === item.ma_vt && (nextItem.lot !== item.lot || nextItem.date !== item.date);
+                const isMergedWithPrev = item.isMergedWithPrev || false;
+                
                 const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
                 const yc_sl = item.yc_sl || 0;
                 
@@ -525,6 +561,20 @@
                                 >
                             </div>
                         </td>
+                        <td class="border border-black p-1 text-center no-print align-middle">
+                            ${canMergeWithNext || isMergedWithPrev ? `
+                                <button onclick="window.toggleMerge(${index})" class="relative p-1 rounded transition-colors ${item.mergedGroupId ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-300 hover:text-orange-500 hover:bg-orange-50 hover:border-orange-200 border border-transparent'}" title="Ghép tem (Cộng dồn YC)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" />
+                                    </svg>
+                                    ${item.mergedGroupId ? `
+                                        <span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold w-3 h-3 rounded-full flex items-center justify-center">
+                                            ${groupNumbers[item.mergedGroupId]}
+                                        </span>
+                                    ` : ''}
+                                </button>
+                            ` : ''}
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -564,6 +614,17 @@
 
             const nganh_display = nganh.replace(/\bESC\b/g, '').replace(/\s+-\s+-+/g, ' -').replace(/-\s*$/, '').trim();
 
+            // Xử lý logic ghép tem (Merge)
+            let displayYcSl = yc_sl;
+            let mergeText = '1/1';
+            
+            if (item.mergedGroupId) {
+                const mergeGroup = window.globalCtData.filter(i => i.mergedGroupId === item.mergedGroupId);
+                displayYcSl = mergeGroup.reduce((sum, i) => sum + (i.yc_sl || 0), 0);
+                const itemIndexInGroup = mergeGroup.findIndex(i => i === item) + 1;
+                mergeText = `${itemIndexInGroup}/${mergeGroup.length}`;
+            }
+
             let formattedPrintTime = '';
             const d = item.print_time ? new Date(item.print_time) : new Date();
             const pad = (n) => n.toString().padStart(2, '0');
@@ -585,7 +646,7 @@
                                 <span class="font-black tracking-tight leading-none whitespace-nowrap text-black" style="font-size: ${maVtFontSize}px;">${item.ma_vt}</span>
                             </div>
                             <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white uppercase">
-                                ${isRelabel ? '' : `<div>YC: <span class="font-bold text-base text-black">${yc_sl}</span></div>`}
+                                ${isRelabel ? '' : `<div>YC: <span class="font-bold text-base text-black">${displayYcSl}</span></div>`}
                                 <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
                                 <div class="flex items-center justify-end gap-1 mt-0.5">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -613,9 +674,10 @@
                             ${isRelabel ? '' : `<span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - ${muc_dich}`}
                         </div>
 
-                        <!-- Thời gian in: Sát đáy bằng absolute để không chiếm diện tích của nội dung -->
-                        <div class="absolute bottom-1 right-2 text-[10px] italic text-black">
-                            ${formattedPrintTime}
+                        <!-- Thời gian in & Text ghép -->
+                        <div class="absolute bottom-1 left-2 right-2 flex justify-between items-end text-[10px] italic text-black">
+                            <span>${mergeText}</span>
+                            <span>${formattedPrintTime}</span>
                         </div>
                     </div>
                 </div>
@@ -667,6 +729,59 @@
             input.focus();
             input.select(); // Tự động tô đen
         }
+
+        window.autoMergeLabels = function() {
+            const data = window.globalCtData;
+            for (let i = 0; i < data.length; i++) {
+                const item = data[i];
+                const nextItem = data[i+1];
+                
+                // Nếu chưa được ghép và dòng tiếp theo trùng mã VT
+                if (!item.mergedGroupId && nextItem && nextItem.ma_vt === item.ma_vt && !nextItem.mergedGroupId) {
+                    const newGroupId = 'merge-' + Date.now() + '-' + i;
+                    item.mergedGroupId = newGroupId;
+                    
+                    let count = 1;
+                    let j = i + 1;
+                    while (j < data.length && data[j].ma_vt === item.ma_vt && count < 4) {
+                        data[j].mergedGroupId = newGroupId;
+                        data[j].isMergedWithPrev = true;
+                        j++;
+                        count++;
+                    }
+                    i = j - 1; // Nhảy qua các dòng đã ghép
+                }
+            }
+        };
+
+        window.toggleMerge = function(index) {
+            const item = window.globalCtData[index];
+            
+            if (item.mergedGroupId) {
+                // Hủy ghép cho cả group
+                const groupId = item.mergedGroupId;
+                window.globalCtData.forEach(i => {
+                    if (i.mergedGroupId === groupId) {
+                        delete i.mergedGroupId;
+                        delete i.isMergedWithPrev;
+                    }
+                });
+            } else {
+                // Tạo group mới: tìm các dòng liên tiếp có cùng mã VT (tối đa 4 dòng)
+                const newGroupId = 'merge-' + Date.now();
+                item.mergedGroupId = newGroupId;
+                
+                let count = 1;
+                let i = index + 1;
+                while (i < window.globalCtData.length && window.globalCtData[i].ma_vt === item.ma_vt && count < 4) {
+                    window.globalCtData[i].mergedGroupId = newGroupId;
+                    window.globalCtData[i].isMergedWithPrev = true;
+                    i++;
+                    count++;
+                }
+            }
+            renderA4();
+        };
 
         window.printRelabelByValue = function (value, index) {
             const item = window.globalCtData[index];
