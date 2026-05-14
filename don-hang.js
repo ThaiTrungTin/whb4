@@ -1296,9 +1296,17 @@ function updateExportTextarea() {
     
     let counter = 1;
     const text = checkedBlocks.map(block => {
-        let blockText = `(${counter}) ${block.ma_nx}${block.team ? ` | Team: ${block.team}` : ''} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
+        // Loại bỏ trường Team theo yêu cầu người dùng
+        let blockText = `(${counter}) ${block.ma_nx} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
         blockText += `Nội dung : ${block.muc_dich}\n`;
-        blockText += `Gửi : ${block.guiText}\n`;
+        
+        // Xử lý tránh bị lặp lại 2 chữ "Gửi :"
+        let cleanGuiText = (block.guiText || '').trim();
+        if (cleanGuiText.startsWith('Gửi :')) {
+            cleanGuiText = cleanGuiText.replace(/^Gửi\s*:\s*/i, '').trim();
+        }
+        blockText += `Gửi : ${cleanGuiText}\n`;
+        
         blockText += `Số Lượng : ${block.slText}\n`;
         blockText += `-------\n\n`;
         counter++;

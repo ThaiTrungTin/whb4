@@ -63,17 +63,24 @@
             position: relative;
         }
 
-        /* Thiết kế Phiếu Vận Chuyển */
+        /* Thiết kế Phiếu Vận Chuyển - Cấu hình để dùng Scale 60 nhưng ra kết quả như 56 */
         .shipping-label {
-            width: 74mm;
-            height: 72mm;
+            width: 73.3mm; 
+            height: 103.6mm;
             border: 1px solid black;
-            font-family: Tahoma, sans-serif;
+            font-family: 'Roboto Condensed', sans-serif;
             background: white;
             display: flex;
             flex-direction: column;
             page-break-after: always;
             box-sizing: border-box;
+        }
+
+        .line-clamp-5 {
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .sl-header {
@@ -82,7 +89,8 @@
             justify-content: center;
             align-items: center;
             overflow: hidden;
-            height: 50px;
+            height: 85px;
+            /* Tăng từ 65px lên 85px (x1.3) */
         }
 
         .sl-section {
@@ -119,7 +127,8 @@
                 print-color-adjust: exact;
                 margin: 0 !important;
                 padding: 0 !important;
-                zoom: 100% !important; /* Ép zoom về 100% khi in */
+                zoom: 100% !important;
+                /* Ép zoom về 100% khi in */
             }
 
             .no-print {
@@ -135,7 +144,8 @@
                 margin: 0;
                 border: none;
                 box-shadow: none;
-                transform: scale(1) !important; /* Đảm bảo không bị scale */
+                transform: scale(1) !important;
+                /* Đảm bảo không bị scale */
                 transform-origin: top left;
             }
 
@@ -152,7 +162,8 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 80mm; /* Ép cứng độ rộng container cho máy in POS */
+                width: 80mm;
+                /* Ép cứng độ rộng container cho máy in POS */
                 zoom: 100% !important;
                 transform: scale(1) !important;
                 transform-origin: top left;
@@ -160,11 +171,13 @@
 
             @page {
                 margin: 0;
-                size: 74mm 72mm;
+                size: 74mm 72mm portrait;
+                /* Ép khổ dọc cho Tem VT */
             }
 
             body.printing-labels #label-area>div {
-                margin-left: 8mm; /* Tăng lên 8mm (5mm cũ + 3mm bù trừ) để không cần chỉnh lề thủ công */
+                margin-left: 8mm;
+                /* Tăng lên 8mm (5mm cũ + 3mm bù trừ) để không cần chỉnh lề thủ công */
                 margin-top: 1.5mm;
             }
 
@@ -182,12 +195,17 @@
             body.printing-labels .label-item {
                 margin-bottom: 0;
             }
-            
+
             body.printing-shipping .shipping-label {
-                transform: scale(1.38) !important;
-                transform-origin: top left;
-                margin-bottom: 35mm !important; /* Tăng khoảng cách vì bị scale */
+                /* Dùng zoom thay cho scale để chữ mịn hơn, không bị vỡ hạt */
+                zoom: 1.5 !important;
+                margin-bottom: 2mm !important;
                 margin-left: 8mm !important;
+
+                /* Bật lại làm mịn chữ để nét tròn trịa */
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+                text-rendering: optimizeLegibility;
             }
 
             body.printing-labels .label-item {
@@ -360,7 +378,18 @@
 
         window.globalCtData = [];
         window.globalDhData = {};
-        window.allOrdersData = []; // Lưu trữ dữ liệu khi in hàng loạt
+        window.allOrdersData = [];
+
+        // Hàm hỗ trợ đổi khổ giấy động
+        function setPrintPageSize(width, height) {
+            let style = document.getElementById('dynamic-print-size');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = 'dynamic-print-size';
+                document.head.appendChild(style);
+            }
+            style.innerHTML = `@page { size: ${width} ${height} portrait !important; margin: 0 !important; }`;
+        }
 
         async function getPendingAmountsByMaVach(maVachList, currentMaKho) {
             const pendingMap = new Map();
@@ -497,14 +526,14 @@
             tableBody.innerHTML = ctData.map((item, index) => {
                 const nextItem = ctData[index + 1];
                 const prevItem = ctData[index - 1];
-                
+
                 // Hiển thị icon ghép nếu mã VT trùng với dòng dưới
                 const canMergeWithNext = nextItem && nextItem.ma_vt === item.ma_vt && (nextItem.lot !== item.lot || nextItem.date !== item.date);
                 const isMergedWithPrev = item.isMergedWithPrev || false;
-                
+
                 const sl = isXuat ? (item.xuat || 0) : (item.nhap || 0);
                 const yc_sl = item.yc_sl || 0;
-                
+
                 let slClass = "";
                 if (sl === yc_sl && yc_sl !== 0) {
                     slClass = "text-green-700 font-black";
@@ -617,7 +646,7 @@
             // Xử lý logic ghép tem (Merge)
             let displayYcSl = yc_sl;
             let mergeText = '1/1';
-            
+
             if (item.mergedGroupId) {
                 const mergeGroup = window.globalCtData.filter(i => i.mergedGroupId === item.mergedGroupId);
                 displayYcSl = mergeGroup.reduce((sum, i) => sum + (i.yc_sl || 0), 0);
@@ -687,7 +716,7 @@
         window.showRelabelInput = function (btn, index) {
             const item = window.globalCtData[index];
             const parent = btn.parentElement;
-            
+
             // Ẩn nút nhấn và số lượng cũ
             btn.classList.add('hidden');
             const stockSpan = parent.querySelector('span');
@@ -698,7 +727,7 @@
             input.type = 'number';
             input.value = item.ton_cuoi;
             input.className = "w-12 h-6 p-1 border border-blue-500 rounded text-xs text-center font-bold outline-none shadow-sm";
-            
+
             input.onkeydown = (e) => {
                 if (e.key === 'Enter') {
                     window.printRelabelByValue(input.value, index);
@@ -730,17 +759,17 @@
             input.select(); // Tự động tô đen
         }
 
-        window.autoMergeLabels = function() {
+        window.autoMergeLabels = function () {
             const data = window.globalCtData;
             for (let i = 0; i < data.length; i++) {
                 const item = data[i];
-                const nextItem = data[i+1];
-                
+                const nextItem = data[i + 1];
+
                 // Nếu chưa được ghép và dòng tiếp theo trùng mã VT
                 if (!item.mergedGroupId && nextItem && nextItem.ma_vt === item.ma_vt && !nextItem.mergedGroupId) {
                     const newGroupId = 'merge-' + Date.now() + '-' + i;
                     item.mergedGroupId = newGroupId;
-                    
+
                     let count = 1;
                     let j = i + 1;
                     while (j < data.length && data[j].ma_vt === item.ma_vt && count < 4) {
@@ -754,9 +783,9 @@
             }
         };
 
-        window.toggleMerge = function(index) {
+        window.toggleMerge = function (index) {
             const item = window.globalCtData[index];
-            
+
             if (item.mergedGroupId) {
                 // Hủy ghép cho cả group
                 const groupId = item.mergedGroupId;
@@ -770,7 +799,7 @@
                 // Tạo group mới: tìm các dòng liên tiếp có cùng mã VT (tối đa 4 dòng)
                 const newGroupId = 'merge-' + Date.now();
                 item.mergedGroupId = newGroupId;
-                
+
                 let count = 1;
                 let i = index + 1;
                 while (i < window.globalCtData.length && window.globalCtData[i].ma_vt === item.ma_vt && count < 4) {
@@ -790,9 +819,9 @@
             const customSl = parseFloat(value);
             if (isNaN(customSl)) return;
 
-            const labelArea = document.getElementById('label-area');
             labelArea.innerHTML = generateLabelHTML({ ...item, customSl: customSl }, true);
-            
+
+            setPrintPageSize('74mm', '72mm'); // Tem VT dùng khổ 72mm
             document.body.classList.add('printing-labels');
             window.print();
         }
@@ -808,16 +837,16 @@
 
             // Tách các khối theo dấu gạch ngang (7 dấu hoặc nhiều hơn)
             const blocks = rawText.split(/-{7,}/).map(b => b.trim()).filter(b => b.length > 0);
-blocks.forEach(block => {
+            blocks.forEach(block => {
                 // Parse Mã NX, Ngành, Yêu Cầu từ dòng đầu tiên: (1) DO-2026-EES | WHB4 - ESC - Tran Canh Phuc
                 const headerMatch = block.match(/\(\d+\)\s*([^|]+?)(?:\s*\|\s*Team:\s*([^|]+))?\s*\|\s*WHB4\s*-\s*([^-]+)\s*-\s*([^\n]+)/);
                 let ma_nx = headerMatch ? headerMatch[1].trim() : 'CUSTOM';
                 let display_ma_nx = ma_nx;
                 if (ma_nx.endsWith('-')) {
-                    display_ma_nx += '<span class="font-light tracking-[0.2em]"> . . .</span>';
+                    display_ma_nx += '<span class="font-light tracking-[0.3em]"> . . .</span>';
                 }
-                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 6 : 0);
-                
+                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 5 : 0);
+
                 let teamOverride = (headerMatch && headerMatch[2]) ? headerMatch[2].trim() : null;
                 let nganh = headerMatch ? headerMatch[3].trim() : 'N/A';
                 let yeu_cau = headerMatch ? headerMatch[4].trim() : 'N/A';
@@ -829,7 +858,7 @@ blocks.forEach(block => {
 
                 // Parse Gửi : (Captures everything until "Số Lượng :" or end of block)
                 const guiMatch = block.match(/Gửi\s*:\s*([\s\S]*?)(?=Số Lượng\s*:|$)/i);
-                let diaChi = guiMatch ? guiMatch[1].trim() : '...................................';
+                let diaChi = guiMatch ? guiMatch[1].trim() : '';
 
                 // Parse Số Lượng : 
                 const slMatch = block.match(/Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i);
@@ -839,18 +868,17 @@ blocks.forEach(block => {
                     if (!isNaN(matchedNum)) totalKien = matchedNum;
                 }
 
-                const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
+                const dynamicFontSize = Math.min(60, Math.max(12, Math.floor(450 / ma_nx_len)));
 
                 for (let i = 1; i <= totalKien; i++) {
                     allLabelsHTML += `
                         <div class="shipping-label">
                             <div class="sl-header">
-                                <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
+                                <img src="${logoUrl}" class="w-80 h-auto block" alt="Logo">
                             </div>
-                            <div class="border-t border-dashed border-black w-full"></div>
-                            <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
-                                 <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
-                                 <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
+                            <div class="sl-section text-center py-2 border-t border-b border-black min-h-[90px] flex flex-col justify-center" style="padding: 0 0.2mm !important;">
+                                 <div class="sl-title text-black mb-1">MÃ XUẤT KHO</div>
+                                 <div class="font-black tracking-tighter text-black uppercase w-full block leading-none whitespace-nowrap text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
                             </div>
                             <div class="sl-section">
                                 <div class="flex items-baseline gap-2">
@@ -859,13 +887,15 @@ blocks.forEach(block => {
                                 </div>
                                 <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${teamOverride ? teamOverride : `${nganh} - ${yeu_cau_khong_dau}`}</div>
                             </div>
-                            <div class="sl-section">
-                                <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${diaChi}</div>
+                            <div class="sl-section flex-grow !border-b-0">
+                                <div class="sl-title text-black">ĐẾN / TO:</div>
+                                <div class="sl-content text-sm text-black font-bold">${diaChi}</div>
                             </div>
-                            <div class="sl-section flex-grow">
-                                <div class="sl-title text-black">NỘI DUNG / CONTENT:</div><div class="sl-content font-normal text-[11px] text-justify text-black">${muc_dich}</div>
+                            <div class="sl-section !border-t border-dashed border-black">
+                                <div class="sl-title text-black">NỘI DUNG / CONTENT:</div>
+                                <div class="sl-content font-normal text-[11px] text-justify text-black line-clamp-5">${muc_dich}</div>
                             </div>
-                            <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
+                            <div class="flex justify-between items-end p-2 pt-2 mt-auto border-t border-black">
                                 <div class="text-sm font-bold text-black">Kiện: ${i}/${totalKien}</div>
                                 <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
                             </div>
@@ -877,6 +907,7 @@ blocks.forEach(block => {
             labelArea.innerHTML = allLabelsHTML;
 
             setTimeout(() => {
+                setPrintPageSize('122mm', '156mm'); // Bù trừ để dùng tỷ lệ 60 ra kết quả 56
                 document.body.classList.add('printing-labels', 'printing-shipping');
                 setTimeout(() => {
                     window.print();
@@ -904,15 +935,15 @@ blocks.forEach(block => {
                 let ma_nx = (dhData.ma_nx || dhData.ma_kho || '').trim();
                 let display_ma_nx = ma_nx;
                 if (ma_nx.endsWith('-')) {
-                    display_ma_nx += '<span class="font-light tracking-[0.2em]"> . . .</span>';
+                    display_ma_nx += '<span class="font-light tracking-[0.3em]"> . . .</span>';
                 }
-                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 6 : 0);
-                const dynamicFontSize = Math.min(48, Math.max(12, Math.floor(450 / ma_nx_len)));
+                let ma_nx_len = ma_nx.length + (ma_nx.endsWith('-') ? 5 : 0);
+                const dynamicFontSize = Math.min(60, Math.max(12, Math.floor(450 / ma_nx_len)));
 
                 // Phân tách ghi chú theo đường kẻ
                 const addressParts = rawGhiChu.split(/_{5,}/).map(p => p.trim()).filter(p => p.length > 0);
                 if (addressParts.length === 0 && rawGhiChu) addressParts.push(rawGhiChu);
-                if (addressParts.length === 0) addressParts.push('...................................');
+                if (addressParts.length === 0) addressParts.push('');
 
                 addressParts.forEach(part => {
                     const slRegex = /Số Lượng\s*:\s*([\d\s\u2026\.]+)\s*Kiện/i;
@@ -928,18 +959,17 @@ blocks.forEach(block => {
                         // Dọn dẹp các ký tự ngăn cách thừa
                         diaChi = diaChi.replace(/^[\s\-\n\r:]+|[\s\-\n\r:]+$/g, '');
                     }
-                    if (!diaChi) diaChi = '...................................';
+                    if (!diaChi) diaChi = '';
 
                     for (let i = 1; i <= totalKien; i++) {
                         allLabelsHTML += `
                             <div class="shipping-label">
                                 <div class="sl-header">
-                                    <img src="${logoUrl}" class="w-48 h-auto block" alt="Logo">
+                                    <img src="${logoUrl}" class="w-80 h-auto block" alt="Logo">
                                 </div>
-                                <div class="border-t border-dashed border-black w-full"></div>
-                                <div class="sl-section bg-gray-100 text-center !p-0 overflow-hidden border-b border-black">
-                                     <div class="sl-title text-black mt-1">MÃ XUẤT KHO</div>
-                                     <div class="font-black tracking-tighter text-black uppercase w-full block leading-none mb-1 whitespace-nowrap overflow-hidden text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
+                                <div class="sl-section text-center py-2 border-t border-b border-black min-h-[90px] flex flex-col justify-center" style="padding: 0 0.2mm !important;">
+                                     <div class="sl-title text-black mb-1">MÃ XUẤT KHO</div>
+                                     <div class="font-black tracking-tighter text-black uppercase w-full block leading-none whitespace-nowrap text-center" style="font-size: ${dynamicFontSize}px;">${display_ma_nx}</div>
                                 </div>
                                 <div class="sl-section">
                                     <div class="flex items-baseline gap-2">
@@ -948,13 +978,15 @@ blocks.forEach(block => {
                                     </div>
                                     <div class="text-[10px] font-bold mt-1 text-black whitespace-nowrap text-center w-full">Team: ${nganh} - ${yeu_cau_khong_dau}</div>
                                 </div>
-                                <div class="sl-section">
-                                    <div class="sl-title text-black">ĐẾN / TO:</div><div class="sl-content text-xs text-black">${diaChi}</div>
+                                <div class="sl-section flex-grow !border-b-0">
+                                    <div class="sl-title text-black">ĐẾN / TO:</div>
+                                    <div class="sl-content text-sm text-black font-bold">${diaChi}</div>
                                 </div>
-                                <div class="sl-section flex-grow">
-                                    <div class="sl-title text-black">NỘI DUNG / CONTENT:</div><div class="sl-content font-normal text-[11px] text-justify text-black">${muc_dich}</div>
+                                <div class="sl-section !border-t border-dashed border-black">
+                                    <div class="sl-title text-black">NỘI DUNG / CONTENT:</div>
+                                    <div class="sl-content font-normal text-[11px] text-justify text-black line-clamp-5">${muc_dich}</div>
                                 </div>
-                                <div class="flex justify-between items-end p-2 pt-4 mt-auto border-t border-black">
+                                <div class="flex justify-between items-end p-2 pt-2 mt-auto border-t border-black">
                                     <div class="text-sm font-bold text-black">Kiện: ${i}/${totalKien}</div>
                                     <div class="text-[8px] text-black">In ngày: ${new Date().toLocaleDateString('vi-VN')}</div>
                                 </div>
@@ -967,6 +999,7 @@ blocks.forEach(block => {
             labelArea.innerHTML = allLabelsHTML;
 
             setTimeout(() => {
+                setPrintPageSize('122mm', '156mm'); // Bù trừ để dùng tỷ lệ 60 ra kết quả 56
                 document.body.classList.add('printing-labels', 'printing-shipping');
                 setTimeout(() => {
                     window.print();
@@ -984,6 +1017,7 @@ blocks.forEach(block => {
 
             labelArea.innerHTML = generateLabelHTML(item);
 
+            setPrintPageSize('74mm', '72mm'); // Tem VT dùng khổ 72mm
             document.body.classList.add('printing-labels');
             setTimeout(() => {
                 window.print();
@@ -1009,6 +1043,7 @@ blocks.forEach(block => {
                 }
             });
 
+            setPrintPageSize('74mm', '72mm'); // Tem VT dùng khổ 72mm
             document.body.classList.add('printing-labels');
             setTimeout(() => {
                 window.print();
@@ -1193,20 +1228,20 @@ blocks.forEach(block => {
                         window.updateSelectionCounter();
                     } else if (eventType === 'INSERT') {
                         if (!maKhoList.includes(newItem.ma_kho)) return;
-                        
+
                         // Để đảm bảo dữ liệu tồn kho đầy đủ, ta fetch nhanh thông tin tồn kho cho mặt hàng này
                         const { data: tkData } = await sb.from('ton_kho_update').select('tray, ton_cuoi').eq('ma_vach', newItem.ma_vach).maybeSingle();
-                        
+
                         const fullNewItem = {
                             ...newItem,
                             tray: tkData?.tray || 'N/A',
                             ton_cuoi: tkData?.ton_cuoi || 0,
-                            pendingXuat: 0 
+                            pendingXuat: 0
                         };
 
                         window.globalCtData.push(fullNewItem);
                         window.globalCtData.sort((a, b) => (a.stt || 0) - (b.stt || 0));
-                        
+
                         // Vẽ lại bảng
                         renderA4();
 
@@ -1218,7 +1253,7 @@ blocks.forEach(block => {
                                 row.classList.remove('bg-green-100');
                                 void row.offsetWidth; // Trigger reflow
                                 row.classList.add('bg-green-100');
-                                
+
                                 const badgeId = `badge-new-${newItem.id}`;
                                 if (!document.getElementById(badgeId)) {
                                     const badge = document.createElement('span');
@@ -1279,7 +1314,7 @@ blocks.forEach(block => {
                         if (window.globalDhData.ma_kho === newItem.ma_kho) {
                             window.globalDhData = { ...window.globalDhData, ...newItem };
                             renderA4();
-                            
+
                             // Hiệu ứng thông báo cập nhật
                             const header = document.querySelector('h2');
                             if (header) {
