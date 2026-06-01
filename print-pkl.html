@@ -698,9 +698,16 @@
                             </div>
                         </div>
                         
-                        <!-- Nội dung (Yêu cầu & Mục đích): Tối đa 4 dòng, tự động co dãn nhưng giới hạn 4 dòng -->
-                        <div class="mt-1 pt-1 text-[12px] italic text-black border-t border-black line-clamp-4 overflow-hidden">
-                            ${isRelabel ? '' : `<span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - ${muc_dich}`}
+                        <!-- Nội dung (Yêu cầu & Mục đích hoặc Hàng Mẫu): Tối đa 4 dòng, tự động co dãn nhưng giới hạn 4 dòng -->
+                        <div class="mt-1 pt-1 text-black border-t border-black line-clamp-4 overflow-hidden ${isRelabel ? 'text-center flex flex-col justify-center items-center text-[11px] font-bold not-italic flex-grow mb-2' : 'text-[12px] italic text-left'}">
+                            ${isRelabel ? `
+                                <div class="w-full flex flex-col justify-center items-center gap-1.5 mt-1.5 text-black">
+                                    <div class="text-[9.8px] font-black uppercase tracking-tight leading-none whitespace-nowrap">HÀNG MẪU KHÔNG BÁN - KHÔNG DÙNG TRÊN NGƯỜI</div>
+                                    <div class="text-[9.8px] font-black uppercase tracking-tight leading-none whitespace-nowrap mt-0.5">SAMPLE NOT FOR SALE - NOT FOR HUMAN USE</div>
+                                </div>
+                            ` : `
+                                <span class="font-bold not-italic text-black">${yeu_cau_khong_dau}</span> - ${muc_dich}
+                            `}
                         </div>
 
                         <!-- Thời gian in & Text ghép -->
@@ -819,11 +826,16 @@
             const customSl = parseFloat(value);
             if (isNaN(customSl)) return;
 
+            const labelArea = document.getElementById('label-area');
             labelArea.innerHTML = generateLabelHTML({ ...item, customSl: customSl }, true);
 
             setPrintPageSize('74mm', '72mm'); // Tem VT dùng khổ 72mm
             document.body.classList.add('printing-labels');
-            window.print();
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('printing-labels');
+                labelArea.innerHTML = '';
+            }, 100);
         }
 
         window.handleCustomShippingPrint = function () {

@@ -971,40 +971,58 @@ function printSingleTonKhoLabel(tk, sl) {
     const pad = (n) => n.toString().padStart(2, '0');
     const d = new Date();
     const formattedPrintTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-    const nganh_display = (tk.nganh || '').replace(/\bESC\b/g, '').replace(/\s+-\s+-+/g, ' -').replace(/-\s*$/, '').trim();
+
+    const ma_vt_len = (tk.ma_vt || '').length;
+    const maVtFontSize = Math.min(36, Math.max(14, Math.floor(280 / ma_vt_len)));
 
     labelArea.innerHTML = `
         <div class="label-item">
-            <!-- Viền bao quanh đảm bảo không bị mất nét -->
-            <div style="position: absolute; inset: 0; border: 1px solid black; z-index: 50; pointer-events: none;"></div>
+            <div class="absolute inset-0 border border-black z-50 pointer-events-none"></div>
             
-            <img src="${logoUrl}" style="position: absolute; top: -16px; left: 6px; width: 160px; height: auto; object-fit: contain; z-index: 0;" alt="Logo">
-            <div style="position: relative; z-index: 10;">
-                <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid black; padding-bottom: 4px; margin-bottom: 8px;">
-                    <div style="display: flex; flex-direction: column; max-width: 75%;">
-                        <div style="height: 40px; width: 100%;"></div> 
-                        <span style="font-size: 1.875rem; line-height: 1; font-weight: 900; letter-spacing: -0.025em; word-break: break-all; margin-top: -4px; color: black;">${tk.ma_vt}</span>
+            <img src="${logoUrl}" class="absolute -top-4 left-1.5 w-40 h-auto object-contain z-0" alt="Logo">
+            
+            <div class="relative z-10 h-full flex flex-col">
+                <div class="flex justify-between items-start border-b border-black pb-1 mb-2">
+                    <div class="flex flex-col flex-grow overflow-hidden">
+                        <div class="h-10 w-full"></div> 
+                        <span class="font-black tracking-tight leading-none whitespace-nowrap text-black" style="font-size: ${maVtFontSize}px;">${tk.ma_vt}</span>
                     </div>
-                    <div style="text-align: right; font-size: 0.75rem; line-height: 1.25; min-width: 50px; margin-top: 4px; background-color: white; text-transform: uppercase;">
-                        <div>SL: <span style="font-size: 1rem; color: black;">${sl}</span></div>
-                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 2px;">
-                             <svg xmlns="http://www.w3.org/2000/svg" style="height: 12px; width: 12px;" viewBox="0 0 20 20" fill="currentColor">
+                    <div class="text-right text-xs leading-tight min-w-[50px] mt-1 bg-white uppercase">
+                        <div>SL: <span class="font-bold text-base text-black">${sl}</span></div>
+                        <div class="flex items-center justify-end gap-1 mt-0.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
                             </svg>
-                            <span style="font-size: 0.875rem; color: black;">${tk.tray || ''}</span>
+                            <span class="font-bold text-sm text-black">${tk.tray || ''}</span>
                         </div>
                     </div>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: 0.75rem; font-weight: 700; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px dashed black; color: black;">
-                    <div style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px;">LOT: ${tk.lot || ''}</div>
-                    <div style="text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 4px;">DATE: ${tk.date || ''}</div>
+                
+                <div class="grid grid-cols-2 font-bold mb-2 pb-1 border-b border-black border-dashed text-black">
+                    <div class="text-left whitespace-nowrap overflow-hidden text-ellipsis pr-1 text-lg">LOT: ${tk.lot || ''}</div>
+                    <div class="text-right whitespace-nowrap overflow-hidden text-ellipsis pl-1 text-xs mt-1">DATE: ${tk.date || ''}</div>
                 </div>
-                <div style="font-size: 0.875rem; font-weight: 600; line-height: 1.25; text-align: left; color: black;">${tk.ten_vt}</div>
                 
-                <!-- Đường kẻ ngang ngăn cách -->
-                <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid black;"></div>
+                <!-- Ô Tên vật tư: Giảm xuống h-6 (~1.1-1.2 lần font), giới hạn 2 dòng, căn giữa dọc -->
+                <div class="flex items-center text-left text-black h-6 mb-1">
+                    <div class="text-sm font-semibold leading-tight line-clamp-2 overflow-hidden">
+                        ${tk.ten_vt}
+                    </div>
+                </div>
                 
-                <div style="font-size: 8px; text-align: right; font-style: italic; color: black; margin-top: 4px;">${formattedPrintTime}</div>
+                <!-- Nội dung (Hàng Mẫu): Tối đa 4 dòng, tự động co dãn nhưng giới hạn 4 dòng -->
+                <div class="mt-1 pt-1 text-black border-t border-black line-clamp-4 overflow-hidden text-center flex flex-col justify-center items-center text-[11px] font-bold not-italic flex-grow mb-2">
+                    <div class="w-full flex flex-col justify-center items-center gap-1.5 mt-1.5 text-black">
+                        <div class="text-[9.8px] font-black uppercase tracking-tight leading-none whitespace-nowrap">HÀNG MẪU KHÔNG BÁN - KHÔNG DÙNG TRÊN NGƯỜI</div>
+                        <div class="text-[9.8px] font-black uppercase tracking-tight leading-none whitespace-nowrap mt-0.5">SAMPLE NOT FOR SALE - NOT FOR HUMAN USE</div>
+                    </div>
+                </div>
+
+                <!-- Thời gian in & Text ghép -->
+                <div class="absolute bottom-1 left-2 right-2 flex justify-between items-end text-[10px] italic text-black">
+                    <span>1/1</span>
+                    <span>${formattedPrintTime}</span>
+                </div>
             </div>
         </div>
     `;

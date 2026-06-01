@@ -190,7 +190,7 @@
         }
         /* --- CẤU HÌNH IN NHÃN TỪ TỒN KHO --- */
         @media print {
-            @page { margin: 0; } /* Xóa lề mặc định của trình duyệt */
+            @page { margin: 0; size: 74mm 72mm portrait !important; } /* Xóa lề mặc định của trình duyệt và ép khổ dọc */
             body { margin: 0; padding: 0; }
             body *:not(#label-area):not(#label-area *) {
                 display: none !important;
@@ -202,9 +202,13 @@
                 top: 0;
                 width: 80mm; /* Cố định độ rộng cho máy in tem */
                 margin: 0;
-                padding-left: 5mm;
-                padding-top: 5mm;
                 zoom: 100% !important;
+                transform: scale(1) !important;
+                transform-origin: top left;
+            }
+            #label-area>div {
+                margin-left: 8mm;
+                margin-top: 1.5mm;
             }
             body { 
                 background: white !important; 
@@ -216,19 +220,16 @@
         body.printing-labels #label-area { display: block; }
 
         .label-item {
-            width: 70mm;
+            width: 74mm;
+            height: 72mm;
             padding: 6px;
-            margin-top: 5mm; /* Thêm margin top để không mất nét trên */
-            margin-bottom: 5mm;
-            margin-left: 0; /* Căn lề trái */
             font-family: Tahoma, sans-serif;
             page-break-inside: avoid;
+            break-inside: avoid;
             display: block;
             background: white;
             box-sizing: border-box;
             position: relative;
-            color: black;
-            border: 1px solid black;
         }
         .label-item img { filter: grayscale(100%) contrast(200%) !important; }
         .label-item * { font-weight: 700 !important; }

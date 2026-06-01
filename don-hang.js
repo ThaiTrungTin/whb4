@@ -1296,17 +1296,16 @@ function updateExportTextarea() {
 
     let counter = 1;
     const text = checkedBlocks.map(block => {
-        // Loại bỏ trường Team theo yêu cầu người dùng
-        let blockText = `(${counter}) ${block.ma_nx} | WHB4 - ${block.nganh} - ${block.yeu_cau}\n`;
-        blockText += `Nội dung:${block.muc_dich}\n`;
-
-        // Xử lý tránh bị lặp lại 2 chữ "Gửi :" (Xóa tất cả các tiền tố "Gửi :" lặp lại ở đầu)
         let cleanGuiText = (block.guiText || '').trim();
         cleanGuiText = cleanGuiText.replace(/^(Gửi\s*:\s*)+/i, '').trim();
-        blockText += `Gửi:${cleanGuiText}\n`;
 
-        blockText += `Số Lượng:${block.slText}\n`;
-        blockText += `-------\n\n`;
+        let lines = [];
+        lines.push(`(${counter}) ${block.ma_nx} | WHB4 - ${block.nganh} - ${block.yeu_cau}`);
+        if (block.muc_dich) lines.push(`Nội dung:${block.muc_dich.trim()}`);
+        lines.push(`Gửi:${cleanGuiText}`);
+        lines.push(`Số Lượng:${block.slText.trim()}`);
+        
+        let blockText = lines.join('\n') + '\n-------\n\n';
         counter++;
         return blockText;
     }).join('');
