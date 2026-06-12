@@ -766,13 +766,15 @@ function renderChiTietTable() {
             }
         }
 
-        let tbThColorClass = 'text-red-600 font-bold';
+        let tbColorClass = 'text-red-600 font-bold';
+        let thColorClass = 'text-red-600 font-bold';
         if (loaiDon === 'Xuat') {
             const tbVal = parseFloat(item.tb) || 0;
             const thVal = parseFloat(item.th) || 0;
             const slVal = parseFloat(item.sl) || 0;
             if (tbVal + thVal === slVal) {
-                tbThColorClass = 'text-green-600 font-bold';
+                tbColorClass = 'text-blue-600 font-bold';
+                thColorClass = 'text-yellow-600 font-bold';
             }
         }
 
@@ -822,10 +824,10 @@ function renderChiTietTable() {
                     <input type="number" value="${(item.sl === null || item.sl === undefined) ? '' : item.sl}" min="0" class="w-full p-1 border rounded chi-tiet-input ${slColorClass}" data-field="sl" data-col="sl" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top chi-tiet-tb-cell">
-                    <input type="number" value="${(item.tb === null || item.tb === undefined) ? '' : item.tb}" min="0" class="w-full p-1 border rounded chi-tiet-input ${tbThColorClass}" data-field="tb" data-col="tb" ${isViewMode ? 'disabled' : ''}>
+                    <input type="number" value="${(item.tb === null || item.tb === undefined) ? '' : item.tb}" min="0" class="w-full p-1 border rounded chi-tiet-input ${tbColorClass}" data-field="tb" data-col="tb" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top chi-tiet-th-cell">
-                    <input type="number" value="${(item.th === null || item.th === undefined) ? '' : item.th}" min="0" class="w-full p-1 border rounded chi-tiet-input ${tbThColorClass}" data-field="th" data-col="th" ${isViewMode ? 'disabled' : ''}>
+                    <input type="number" value="${(item.th === null || item.th === undefined) ? '' : item.th}" min="0" class="w-full p-1 border rounded chi-tiet-input ${thColorClass}" data-field="th" data-col="th" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top text-center font-mono ${barcodeColorClass}">${generatedBarcode || ''}</td>
                 <td class="p-1 border text-center align-top">
@@ -1871,8 +1873,10 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                     const existing = mergedMap.get(key);
                     if (item.loai === 'Trưng Bày') {
                         existing.tb = (existing.tb || 0) + (item.xuat || 0);
+                        existing.tbId = item.id;
                     } else if (item.loai === 'Tiêu Hao') {
                         existing.th = (existing.th || 0) + (item.xuat || 0);
+                        existing.thId = item.id;
                     }
                     existing.sl = (existing.sl || 0) + (item.xuat || 0);
                     existing.yc_sl = (existing.yc_sl || 0) + (item.yc_sl || 0);
@@ -1880,6 +1884,11 @@ export async function openDonHangModal(dh = null, mode = 'add') {
                     const newItem = { ...item };
                     newItem.tb = item.loai === 'Trưng Bày' ? (item.xuat || 0) : 0;
                     newItem.th = item.loai === 'Tiêu Hao' ? (item.xuat || 0) : 0;
+                    if (item.loai === 'Trưng Bày') {
+                        newItem.tbId = item.id;
+                    } else if (item.loai === 'Tiêu Hao') {
+                        newItem.thId = item.id;
+                    }
                     newItem.sl = item.xuat || 0;
                     // Bỏ thuộc tính loai để tránh nhầm lẫn trên UI
                     delete newItem.loai;
@@ -1910,6 +1919,14 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
     const itemsToAdd = [];
     const itemsToUpdate = [];
 
+    // Lấy danh sách ID các dòng hiện đang có trong DB của đơn hàng này
+    const { data: existingRows, error: fetchError } = await sb
+        .from('chi_tiet')
+        .select('id')
+        .eq('ma_kho', ma_kho_don_hang);
+    if (fetchError) throw fetchError;
+    const dbRowIds = (existingRows || []).map(r => r.id);
+
     for (const item of chiTietItems) {
         if (!item) continue;
         if (!item.nganh && item.tonKhoData) item.nganh = item.tonKhoData.nganh;
@@ -1920,14 +1937,14 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
     chiTietItems.forEach((item) => {
         if (!item) return;
 
-        const createRowData = (loaiVal, slVal, ycVal, isFirstRow) => {
-            const rowId = (isFirstRow && !item.id.toString().startsWith('new-')) 
-                ? item.id 
+        const createRowData = (loaiVal, slVal, ycVal, rowId) => {
+            const finalRowId = (rowId && !rowId.toString().startsWith('new-')) 
+                ? rowId 
                 : crypto.randomUUID();
                 
             return {
                 stt: currentStt++,
-                id: rowId,
+                id: finalRowId,
                 ma_kho: ma_kho_don_hang,
                 thoi_gian: donHangInfo.thoi_gian,
                 ma_nx: donHangInfo.ma_nx,
@@ -1960,41 +1977,46 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
                     yc_th = ycVal - yc_tb;
                 }
 
-                const rowTB = createRowData('Trưng Bày', tbVal, yc_tb, true);
-                const rowTH = createRowData('Tiêu Hao', thVal, yc_th, false);
+                const rowTB = createRowData('Trưng Bày', tbVal, yc_tb, item.tbId);
+                const rowTH = createRowData('Tiêu Hao', thVal, yc_th, item.thId);
 
-                if (!item.id.toString().startsWith('new-')) {
+                if (item.tbId && !item.tbId.toString().startsWith('new-')) {
                     itemsToUpdate.push(rowTB);
-                    itemsToAdd.push(rowTH);
                 } else {
                     itemsToAdd.push(rowTB);
+                }
+
+                if (item.thId && !item.thId.toString().startsWith('new-')) {
+                    itemsToUpdate.push(rowTH);
+                } else {
                     itemsToAdd.push(rowTH);
                 }
             } else if (tbVal > 0) {
-                const rowTB = createRowData('Trưng Bày', tbVal, ycVal, true);
-                if (!item.id.toString().startsWith('new-')) {
+                const rowTB = createRowData('Trưng Bày', tbVal, ycVal, item.tbId);
+                if (item.tbId && !item.tbId.toString().startsWith('new-')) {
                     itemsToUpdate.push(rowTB);
                 } else {
                     itemsToAdd.push(rowTB);
                 }
             } else if (thVal > 0) {
-                const rowTH = createRowData('Tiêu Hao', thVal, ycVal, true);
-                if (!item.id.toString().startsWith('new-')) {
+                const rowTH = createRowData('Tiêu Hao', thVal, ycVal, item.thId);
+                if (item.thId && !item.thId.toString().startsWith('new-')) {
                     itemsToUpdate.push(rowTH);
                 } else {
                     itemsToAdd.push(rowTH);
                 }
             } else {
-                const rowDefault = createRowData('Tiêu Hao', 0, ycVal, true);
-                if (!item.id.toString().startsWith('new-')) {
+                const defaultId = item.thId || item.tbId;
+                const rowDefault = createRowData('Tiêu Hao', 0, ycVal, defaultId);
+                if (defaultId && !defaultId.toString().startsWith('new-')) {
                     itemsToUpdate.push(rowDefault);
                 } else {
                     itemsToAdd.push(rowDefault);
                 }
             }
         } else {
-            const rowNhap = createRowData(null, parseFloat(item.sl) || 0, parseFloat(item.yc_sl) || 0, true);
-            if (!item.id.toString().startsWith('new-')) {
+            const rowNhap = createRowData(null, parseFloat(item.sl) || 0, parseFloat(item.yc_sl) || 0, item.id);
+            if (item.id && !item.id.toString().startsWith('new-')) {
                 itemsToUpdate.push(rowNhap);
             } else {
                 itemsToAdd.push(rowNhap);
@@ -2002,9 +2024,11 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
         }
     });
 
-    const initialIds = new Set(initialChiTietItems.map(item => item.id));
-    const currentIds = new Set(chiTietItems.map(item => item.id).filter(id => !id.toString().startsWith('new-')));
-    const idsToDelete = [...initialIds].filter(id => !currentIds.has(id));
+    const currentIds = new Set();
+    itemsToUpdate.forEach(row => currentIds.add(row.id));
+    itemsToAdd.forEach(row => currentIds.add(row.id));
+
+    const idsToDelete = dbRowIds.filter(id => !currentIds.has(id));
 
     const promises = [];
     if (idsToDelete.length > 0) {
@@ -2964,14 +2988,7 @@ export function initDonHangView() {
                         }
                     }
 
-                    const endFieldIndex = startFieldIndex + cells.length - 1;
-                    const affectedFields = fieldsOrder.slice(startFieldIndex, endFieldIndex + 1);
-                    if (affectedFields.includes('tb') || affectedFields.includes('th')) {
-                        const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
-                        if (loaiDon === 'Xuat') {
-                            currentItem.sl = (currentItem.tb || 0) + (currentItem.th || 0);
-                        }
-                    }
+
                 }
 
                 if (maVtUpdatePromises.length > 0) {
