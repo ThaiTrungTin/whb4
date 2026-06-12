@@ -2926,31 +2926,51 @@ export function initDonHangView() {
             }
 
             showLoading(true);
-            showToast(`Đang dán ${pastedValues.length} mục...`, 'info');
+            showToast(`Đang dán ${pastedValues.length} dòng...`, 'info');
 
             try {
                 const maVtUpdatePromises = [];
+                const fieldsOrder = ['ma_vt', 'ten_vt', 'lot', 'date', 'yc_sl', 'sl', 'tb', 'th'];
 
                 for (let i = 0; i < pastedValues.length; i++) {
                     const targetIndex = startIndex + i;
-                    let value = pastedValues[i].trim();
+                    const line = pastedValues[i];
+                    const cells = line.split('\t');
 
                     let currentItem = chiTietItems[targetIndex];
-
                     if (!currentItem) {
                         currentItem = { id: `new-${Date.now()}-${Math.random()}`, tb: 0, th: 0, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } };
                         chiTietItems.push(currentItem);
                     }
 
-                    if (targetField === 'yc_sl' || targetField === 'sl' || targetField === 'tb' || targetField === 'th') {
-                        const numValue = parseInt(value, 10);
-                        currentItem[targetField] = isNaN(numValue) ? 0 : numValue;
-                    } else {
-                        currentItem[targetField] = value;
+                    const startFieldIndex = fieldsOrder.indexOf(targetField);
+
+                    for (let c = 0; c < cells.length; c++) {
+                        const cellVal = cells[c].trim();
+                        const fieldIndex = startFieldIndex + c;
+                        if (fieldIndex >= fieldsOrder.length) break;
+
+                        const currentField = fieldsOrder[fieldIndex];
+
+                        if (currentField === 'yc_sl' || currentField === 'sl' || currentField === 'tb' || currentField === 'th') {
+                            const numValue = parseInt(cellVal, 10);
+                            currentItem[currentField] = isNaN(numValue) ? 0 : numValue;
+                        } else {
+                            currentItem[currentField] = cellVal;
+                        }
+
+                        if (currentField === 'ma_vt') {
+                            maVtUpdatePromises.push(updateItemFromMaVt(currentItem, cellVal));
+                        }
                     }
 
-                    if (targetField === 'ma_vt') {
-                        maVtUpdatePromises.push(updateItemFromMaVt(currentItem, value));
+                    const endFieldIndex = startFieldIndex + cells.length - 1;
+                    const affectedFields = fieldsOrder.slice(startFieldIndex, endFieldIndex + 1);
+                    if (affectedFields.includes('tb') || affectedFields.includes('th')) {
+                        const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+                        if (loaiDon === 'Xuat') {
+                            currentItem.sl = (currentItem.tb || 0) + (currentItem.th || 0);
+                        }
                     }
                 }
 
