@@ -855,50 +855,68 @@ function renderChiTietTable() {
 
 /**
  * Điều hướng thông minh:
- * 1. Nhấn Tab khi có gợi ý: Chọn cái đầu tiên.
- * 2. Điều hướng theo cột (xuống dòng) cho Ma VT, LOT, Y/c, Nhập.
+ * 1. Nhấn Tab/Enter khi có gợi ý: Chọn cái đầu tiên.
+ * 2. Nhấn Tab để dịch chuyển qua các ô có thể sửa được trong cùng dòng, hết dòng sẽ xuống dòng tiếp theo.
+ * 3. Nhấn Enter để di chuyển xuống ô cùng cột ở dòng tiếp theo.
  */
-function handleSmartTabNavigation(event) {
-    if (event.key !== 'Tab') return;
+function getEditableInputs() {
+    const container = document.getElementById('don-hang-chi-tiet-body');
+    if (!container) return [];
+    
+    return Array.from(container.querySelectorAll('input')).filter(input => {
+        return !input.disabled && (input.offsetWidth > 0 || input.offsetHeight > 0);
+    });
+}
 
-    const input = event.target;
-    const isShift = event.shiftKey;
-    if (isShift) return; // Để mặc định cho Shift+Tab
-
-    const lotPopover = document.getElementById('lot-selector-popover');
-    const autocompletePopover = document.querySelector('.absolute.z-40.bg-white.border');
-
-    if (lotPopover) {
-        const firstOption = lotPopover.querySelector('.lot-option');
-        if (firstOption) {
-            event.preventDefault();
-            firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-            focusNextRowInput(input);
-            return;
+function focusNextHorizontalInput(currentInput, isShift = false) {
+    const allInputs = getEditableInputs();
+    if (allInputs.length === 0) return;
+    
+    const index = allInputs.indexOf(currentInput);
+    if (index === -1) return;
+    
+    if (isShift) {
+        if (index > 0) {
+            allInputs[index - 1].focus();
+            if (allInputs[index - 1].select) allInputs[index - 1].select();
+        }
+    } else {
+        if (index < allInputs.length - 1) {
+            allInputs[index + 1].focus();
+            if (allInputs[index + 1].select) allInputs[index + 1].select();
+        } else {
+            document.getElementById('don-hang-them-vat-tu-btn').focus();
         }
     }
+}
 
-    if (autocompletePopover) {
-        const firstOption = autocompletePopover.querySelector('.autocomplete-option');
-        if (firstOption) {
-            event.preventDefault();
-            firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
-            if (input.dataset.col) {
-                focusNextRowInput(input);
-            } else {
-                focusNextFormField(input);
-            }
-            return;
-        }
+function focusNextRowInput(currentInput) {
+    let currentCol = currentInput.dataset.col;
+    let currentRow = currentInput.closest('tr.chi-tiet-row');
+    
+    if (currentInput.classList.contains('chi-tiet-tray-input')) {
+        currentCol = 'tray';
+        const infoRow = currentInput.closest('tr');
+        currentRow = infoRow ? infoRow.previousElementSibling : null;
     }
+    
+    if (!currentRow) return;
 
-    const specialCols = ['ma_vt', 'lot', 'yc_sl', 'sl'];
-    const currentCol = input.dataset.col;
-
-    if (specialCols.includes(currentCol)) {
-        event.preventDefault();
-        focusNextRowInput(input);
+    const nextRow = currentRow.nextElementSibling?.nextElementSibling;
+    if (nextRow && nextRow.classList.contains('chi-tiet-row')) {
+        let nextInput;
+        if (currentCol === 'tray') {
+            const nextInfoRow = nextRow.nextElementSibling;
+            nextInput = nextInfoRow?.querySelector('.chi-tiet-tray-input');
+        } else {
+            nextInput = nextRow.querySelector(`[data-col="${currentCol}"]`);
+        }
+        if (nextInput) {
+            nextInput.focus();
+            if (nextInput.select) nextInput.select();
+        }
+    } else {
+        document.getElementById('don-hang-them-vat-tu-btn').focus();
     }
 }
 
@@ -911,20 +929,79 @@ function focusNextFormField(currentInput) {
     }
 }
 
-function focusNextRowInput(currentInput) {
-    const currentCol = currentInput.dataset.col;
-    const currentRow = currentInput.closest('tr.chi-tiet-row');
-    if (!currentRow) return;
+function handleSmartTabNavigation(event) {
+    if (event.key !== 'Tab' && event.key !== 'Enter') return;
 
-    const nextRow = currentRow.nextElementSibling?.nextElementSibling;
-    if (nextRow && nextRow.classList.contains('chi-tiet-row')) {
-        const nextInput = nextRow.querySelector(`[data-col="${currentCol}"]`);
-        if (nextInput) {
-            nextInput.focus();
-            if (nextInput.select) nextInput.select();
+    const input = event.target;
+    const isShift = event.shiftKey;
+
+    const lotPopover = document.getElementById('lot-selector-popover');
+    const autocompletePopover = document.querySelector('.absolute.z-40.bg-white.border');
+
+    if (lotPopover) {
+        if (!input.value.trim()) {
+            const firstOption = lotPopover.querySelector('.lot-option');
+            if (firstOption) {
+                event.preventDefault();
+                firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                
+                setTimeout(() => {
+                    if (event.key === 'Enter') {
+                        focusNextRowInput(input);
+                    } else {
+                        focusNextHorizontalInput(input, isShift);
+                    }
+                }, 50);
+                return;
+            }
+        } else {
+            closeActiveLotPopover();
+            if (event.key === 'Tab') {
+                event.preventDefault();
+                focusNextHorizontalInput(input, isShift);
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                focusNextRowInput(input);
+            }
+            return;
         }
-    } else {
-        document.getElementById('don-hang-them-vat-tu-btn').focus();
+    }
+
+    if (autocompletePopover) {
+        const firstOption = autocompletePopover.querySelector('.autocomplete-option');
+        if (firstOption) {
+            event.preventDefault();
+            firstOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+            setTimeout(() => {
+                const isDetailRow = input.classList.contains('chi-tiet-input') || input.classList.contains('chi-tiet-tray-input') || input.classList.contains('chi-tiet-lot-input');
+                if (event.key === 'Enter') {
+                    if (isDetailRow || input.dataset.col) {
+                        focusNextRowInput(input);
+                    } else {
+                        focusNextFormField(input);
+                    }
+                } else {
+                    if (isDetailRow) {
+                        focusNextHorizontalInput(input, isShift);
+                    } else {
+                        focusNextFormField(input);
+                    }
+                }
+            }, 50);
+            return;
+        }
+    }
+
+    const isDetailRow = input.classList.contains('chi-tiet-input') || input.classList.contains('chi-tiet-tray-input') || input.classList.contains('chi-tiet-lot-input');
+    if (isDetailRow) {
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            focusNextHorizontalInput(input, isShift);
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            focusNextRowInput(input);
+        }
     }
 }
 
@@ -3175,6 +3252,17 @@ export function initDonHangView() {
         const input = e.target;
         if (input.classList.contains('chi-tiet-input') && input.dataset.field === 'ma_vt') {
             await handleMaVtAutocomplete(input);
+        }
+        
+        if (input.classList.contains('chi-tiet-lot-input')) {
+            const row = input.closest('tr');
+            if (row) {
+                const id = row.dataset.id;
+                const item = chiTietItems.find(i => i && i.id == id);
+                if (item && !input.value.trim()) {
+                    openLotSelectorPopover(input, item);
+                }
+            }
         }
         // Chúng ta đã dùng mousedown cho tray để nhạy hơn, nhưng vẫn giữ focusin đề phòng dùng phím Tab
         if (input.classList.contains('chi-tiet-tray-input')) {
