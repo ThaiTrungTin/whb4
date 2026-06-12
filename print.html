@@ -318,6 +318,25 @@
                 document.getElementById('total-sl').textContent = totalSl;
                 document.getElementById('total-ycsl').textContent = totalYcsl;
 
+                const tfootColspan = document.getElementById('tfoot-colspan');
+                if (isXuat) {
+                    let totalTB = 0;
+                    let totalTH = 0;
+                    chiTietData.forEach(item => {
+                        if (item.loai === 'Trưng Bày') totalTB += item.xuat || 0;
+                        if (item.loai === 'Tiêu Hao') totalTH += item.xuat || 0;
+                    });
+                    tfootColspan.outerHTML = `
+                        <td id="total-tb" class="border border-black p-1 text-center font-semibold bg-gray-100">${totalTB}</td>
+                        <td id="total-th" class="border border-black p-1 text-center font-semibold bg-gray-100">${totalTH}</td>
+                        <td class="border border-black p-1 bg-gray-100"></td>
+                    `;
+                } else {
+                    tfootColspan.outerHTML = `
+                        <td class="border border-black p-1 bg-gray-100"></td>
+                    `;
+                }
+
                 new QRCode(document.getElementById("qrcode"), {
                     text: window.location.href,
                     width: 64,  // Thay đổi từ 48
@@ -482,9 +501,15 @@
             // --- Cập nhật Footer Excel ---
             let totalRow = ["", "", "", "Tổng", totalYcsl, totalSl];
             if (isXuat) {
-                totalRow.push("", ""); // Placeholder cho 2 cột ẩn
+                let totalTB = 0;
+                let totalTH = 0;
+                chiTietData.forEach(item => {
+                    if (item.loai === 'Trưng Bày') totalTB += item.xuat || 0;
+                    if (item.loai === 'Tiêu Hao') totalTH += item.xuat || 0;
+                });
+                totalRow.push(totalTB, totalTH);
             }
-            totalRow.push(""); // Placeholder cho Ghi Chú
+            totalRow.push(""); // Ghi Chú
             // --- Hết ---
 
             const footerData = [

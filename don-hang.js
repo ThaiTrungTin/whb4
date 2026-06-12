@@ -656,13 +656,23 @@ function updateChiTietSummary() {
     const totalYCSL = chiTietItems.reduce((sum, item) => sum + (parseFloat(item.yc_sl) || 0), 0);
     const totalSL = chiTietItems.reduce((sum, item) => sum + (parseFloat(item.sl) || 0), 0);
 
-    const label = loaiDon === 'Nhap' ? 'Thực Nhập' : 'Thực Xuất';
-
-    summaryEl.innerHTML = `
-        <span class="font-bold">Tổng cộng</span> ${label} / YCSL: 
-        <span class="font-bold text-blue-600">${totalSL.toLocaleString()}</span> / 
-        <span class="font-bold text-gray-800">${totalYCSL.toLocaleString()}</span>
-    `;
+    if (loaiDon === 'Xuat') {
+        const totalTB = chiTietItems.reduce((sum, item) => sum + (parseFloat(item.tb) || 0), 0);
+        const totalTH = chiTietItems.reduce((sum, item) => sum + (parseFloat(item.th) || 0), 0);
+        summaryEl.innerHTML = `
+            <span class="font-bold">Tổng cộng</span> Thực Xuất / YCSL: 
+            <span class="font-bold text-green-600">${totalSL.toLocaleString()}</span> 
+            (<span class="font-bold text-indigo-600">${totalTB.toLocaleString()} TB</span> / 
+            <span class="font-bold text-amber-600">${totalTH.toLocaleString()} TH</span>) / 
+            <span class="font-bold text-gray-800">${totalYCSL.toLocaleString()}</span>
+        `;
+    } else {
+        summaryEl.innerHTML = `
+            <span class="font-bold">Tổng cộng</span> Thực Nhập / YCSL: 
+            <span class="font-bold text-green-600">${totalSL.toLocaleString()}</span> / 
+            <span class="font-bold text-gray-800">${totalYCSL.toLocaleString()}</span>
+        `;
+    }
 }
 
 async function fetchChiTietDonHang(ma_kho_don_hang) {
@@ -680,8 +690,10 @@ function toggleDonHangModalColumns() {
     const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
     const isNhap = loaiDon === 'Nhap';
 
-    document.getElementById('don-hang-chi-tiet-loai-header')?.classList.toggle('hidden', isNhap);
-    document.querySelectorAll('.chi-tiet-loai-cell').forEach(cell => cell.classList.toggle('hidden', isNhap));
+    document.getElementById('don-hang-chi-tiet-tb-header')?.classList.toggle('hidden', isNhap);
+    document.getElementById('don-hang-chi-tiet-th-header')?.classList.toggle('hidden', isNhap);
+    document.querySelectorAll('.chi-tiet-tb-cell').forEach(cell => cell.classList.toggle('hidden', isNhap));
+    document.querySelectorAll('.chi-tiet-th-cell').forEach(cell => cell.classList.toggle('hidden', isNhap));
 
     document.getElementById('don-hang-fill-sl-all-btn')?.classList.toggle('hidden', !isNhap);
 
@@ -754,6 +766,16 @@ function renderChiTietTable() {
             }
         }
 
+        let tbThColorClass = 'text-red-600 font-bold';
+        if (loaiDon === 'Xuat') {
+            const tbVal = parseFloat(item.tb) || 0;
+            const thVal = parseFloat(item.th) || 0;
+            const slVal = parseFloat(item.sl) || 0;
+            if (tbVal + thVal === slVal) {
+                tbThColorClass = 'text-green-600 font-bold';
+            }
+        }
+
         const isNhapMode = loaiDon === 'Nhap';
         const trayValue = item.tray !== undefined ? item.tray : (item.tonKhoData?.tray || '');
         const trayInfo = (isNhapMode && !isViewMode)
@@ -766,7 +788,24 @@ function renderChiTietTable() {
                 <td class="p-1 border align-top relative">
                     <input type="text" value="${item.ma_vt || ''}" class="w-full p-1 border rounded chi-tiet-input" data-field="ma_vt" data-col="ma_vt" autocomplete="off" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
                 </td>
-                <td class="p-1 border align-top break-words">${item.ten_vt || ''}</td>
+                <td class="p-1 border align-top break-words chi-tiet-ten-vt-cell">
+                    <div class="relative flex items-start gap-1 justify-between">
+                        <div class="name-text line-clamp-2 text-xs text-gray-700 leading-normal flex-1">
+                            ${item.ten_vt || ''}
+                        </div>
+                        ${item.ten_vt && item.ten_vt.length > 20 ? `
+                        <button type="button" class="toggle-name-btn p-0.5 text-gray-400 hover:text-gray-600 focus:outline-none flex-shrink-0" title="Xem thêm/Ẩn bớt">
+                            <svg class="w-4 h-4 eye-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <svg class="w-4 h-4 eye-off-icon hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"></path>
+                            </svg>
+                        </button>
+                        ` : ''}
+                    </div>
+                </td>
                 <td class="p-1 border align-top">
                     <div class="relative">
                         <input type="text" value="${item.lot || ''}" class="w-full p-1 border rounded chi-tiet-lot-input" data-col="lot" readonly placeholder="Ch\u1ecdn LOT..." ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
@@ -782,12 +821,11 @@ function renderChiTietTable() {
                 <td class="p-1 border align-top">
                     <input type="number" value="${(item.sl === null || item.sl === undefined) ? '' : item.sl}" min="0" class="w-full p-1 border rounded chi-tiet-input ${slColorClass}" data-field="sl" data-col="sl" ${isViewMode ? 'disabled' : ''}>
                 </td>
-                <td class="p-1 border align-top chi-tiet-loai-cell">
-                    <select class="w-full p-1 border rounded chi-tiet-input" data-field="loai" ${isViewMode || isNhapTraMode ? 'disabled' : ''}>
-                        <option value="" disabled ${!item.loai ? 'selected' : ''}>-- Ch\u1ecdn --</option>
-                        <option value="Ti\u00eau Hao" ${item.loai === 'Ti\u00eau Hao' ? 'selected' : ''}>Ti\u00eau Hao</option>
-                        <option value="Tr\u01b0ng B\u00e0y" ${item.loai === 'Tr\u01b0ng B\u00e0y' ? 'selected' : ''}>Tr\u01b0ng B\u00e0y</option>
-                    </select>
+                <td class="p-1 border align-top chi-tiet-tb-cell">
+                    <input type="number" value="${(item.tb === null || item.tb === undefined) ? '' : item.tb}" min="0" class="w-full p-1 border rounded chi-tiet-input ${tbThColorClass}" data-field="tb" data-col="tb" ${isViewMode ? 'disabled' : ''}>
+                </td>
+                <td class="p-1 border align-top chi-tiet-th-cell">
+                    <input type="number" value="${(item.th === null || item.th === undefined) ? '' : item.th}" min="0" class="w-full p-1 border rounded chi-tiet-input ${tbThColorClass}" data-field="th" data-col="th" ${isViewMode ? 'disabled' : ''}>
                 </td>
                 <td class="p-1 border align-top text-center font-mono ${barcodeColorClass}">${generatedBarcode || ''}</td>
                 <td class="p-1 border text-center align-top">
@@ -795,7 +833,7 @@ function renderChiTietTable() {
                 </td>
             </tr>
             <tr data-info-id="${item.id}" class="bg-blue-50">
-                 <td colspan="10" class="px-2 py-1.5 text-xs text-gray-800 border border-t-0 border-blue-200">
+                 <td colspan="11" class="px-2 py-1.5 text-xs text-gray-800 border border-t-0 border-blue-200">
                     <div class="flex justify-between items-center">
                         <div>
                             <span class="font-semibold">${tonKhoInfo}</span>${pendingInfo} | <span class="font-semibold">${projectedStockText}</span>
@@ -1012,7 +1050,19 @@ function openLotSelectorPopover(inputElement, item) {
             if (loaiDon === 'Xuat') {
                 const availableStock = item.tonKhoData?.ton_cuoi || 0;
                 const requestedQty = parseFloat(item.yc_sl) || 0;
-                item.sl = Math.min(availableStock, requestedQty);
+
+                const isTbChecked = document.getElementById('don-hang-chi-tiet-tb-checkbox')?.checked;
+                const isThChecked = document.getElementById('don-hang-chi-tiet-th-checkbox')?.checked;
+
+                const actualSl = Math.min(availableStock, requestedQty);
+                item.sl = actualSl;
+
+                if (isTbChecked) {
+                    item.tb = actualSl;
+                }
+                if (isThChecked) {
+                    item.th = actualSl;
+                }
             }
         }
         closeActiveLotPopover();
@@ -1809,6 +1859,45 @@ export async function openDonHangModal(dh = null, mode = 'add') {
         });
 
         chiTietItems = await Promise.all(chiTietPromises);
+
+        // Gộp các dòng trùng ma_vt và lot đối với đơn Xuất
+        const loaiDon = dh.ma_kho.startsWith('IN') ? 'Nhap' : 'Xuat';
+        if (loaiDon === 'Xuat') {
+            const mergedMap = new Map();
+            chiTietItems.forEach(item => {
+                if (!item) return;
+                const key = `${item.ma_vt || ''}_${item.lot || ''}`;
+                if (mergedMap.has(key)) {
+                    const existing = mergedMap.get(key);
+                    if (item.loai === 'Trưng Bày') {
+                        existing.tb = (existing.tb || 0) + (item.xuat || 0);
+                    } else if (item.loai === 'Tiêu Hao') {
+                        existing.th = (existing.th || 0) + (item.xuat || 0);
+                    }
+                    existing.sl = (existing.sl || 0) + (item.xuat || 0);
+                    existing.yc_sl = (existing.yc_sl || 0) + (item.yc_sl || 0);
+                } else {
+                    const newItem = { ...item };
+                    newItem.tb = item.loai === 'Trưng Bày' ? (item.xuat || 0) : 0;
+                    newItem.th = item.loai === 'Tiêu Hao' ? (item.xuat || 0) : 0;
+                    newItem.sl = item.xuat || 0;
+                    // Bỏ thuộc tính loai để tránh nhầm lẫn trên UI
+                    delete newItem.loai;
+                    mergedMap.set(key, newItem);
+                }
+            });
+            chiTietItems = Array.from(mergedMap.values());
+        } else {
+            // Đối với đơn Nhập
+            chiTietItems.forEach(item => {
+                if (item) {
+                    item.tb = 0;
+                    item.th = 0;
+                    item.sl = item.nhap || 0;
+                }
+            });
+        }
+
         initialChiTietItems = JSON.parse(JSON.stringify(chiTietItems));
     }
 
@@ -1827,32 +1916,89 @@ async function syncChiTietDonHang(ma_kho_don_hang, donHangInfo) {
         if (!item.phu_trach && item.tonKhoData) item.phu_trach = item.tonKhoData.phu_trach;
     }
 
-    chiTietItems.forEach((item, index) => {
+    let currentStt = 1;
+    chiTietItems.forEach((item) => {
         if (!item) return;
-        const baseData = {
-            stt: index + 1,
-            id: item.id.toString().startsWith('new-') ? crypto.randomUUID() : item.id,
-            ma_kho: ma_kho_don_hang,
-            thoi_gian: donHangInfo.thoi_gian,
-            ma_nx: donHangInfo.ma_nx,
-            ma_vt: item.ma_vt,
-            ma_vach: item.ma_vach,
-            ten_vt: item.ten_vt,
-            lot: item.lot,
-            date: item.date,
-            yc_sl: item.yc_sl,
-            nhap: donHangInfo.loai_don === 'Nhap' ? item.sl : 0,
-            xuat: donHangInfo.loai_don === 'Xuat' ? item.sl : 0,
-            loai: item.loai,
-            yeu_cau: donHangInfo.yeu_cau,
-            muc_dich: donHangInfo.muc_dich,
-            nganh: item.nganh,
-            phu_trach: item.phu_trach,
+
+        const createRowData = (loaiVal, slVal, ycVal, isFirstRow) => {
+            const rowId = (isFirstRow && !item.id.toString().startsWith('new-')) 
+                ? item.id 
+                : crypto.randomUUID();
+                
+            return {
+                stt: currentStt++,
+                id: rowId,
+                ma_kho: ma_kho_don_hang,
+                thoi_gian: donHangInfo.thoi_gian,
+                ma_nx: donHangInfo.ma_nx,
+                ma_vt: item.ma_vt,
+                ma_vach: item.ma_vach,
+                ten_vt: item.ten_vt,
+                lot: item.lot,
+                date: item.date,
+                yc_sl: ycVal,
+                nhap: donHangInfo.loai_don === 'Nhap' ? slVal : 0,
+                xuat: donHangInfo.loai_don === 'Xuat' ? slVal : 0,
+                loai: loaiVal,
+                yeu_cau: donHangInfo.yeu_cau,
+                muc_dich: donHangInfo.muc_dich,
+                nganh: item.nganh,
+                phu_trach: item.phu_trach,
+            };
         };
-        if (item.id.toString().startsWith('new-')) {
-            itemsToAdd.push(baseData);
+
+        if (donHangInfo.loai_don === 'Xuat') {
+            const tbVal = parseFloat(item.tb) || 0;
+            const thVal = parseFloat(item.th) || 0;
+            const ycVal = parseFloat(item.yc_sl) || 0;
+
+            if (tbVal > 0 && thVal > 0) {
+                let yc_th = thVal;
+                let yc_tb = ycVal - yc_th;
+                if (yc_tb < tbVal) {
+                    yc_tb = tbVal;
+                    yc_th = ycVal - yc_tb;
+                }
+
+                const rowTB = createRowData('Trưng Bày', tbVal, yc_tb, true);
+                const rowTH = createRowData('Tiêu Hao', thVal, yc_th, false);
+
+                if (!item.id.toString().startsWith('new-')) {
+                    itemsToUpdate.push(rowTB);
+                    itemsToAdd.push(rowTH);
+                } else {
+                    itemsToAdd.push(rowTB);
+                    itemsToAdd.push(rowTH);
+                }
+            } else if (tbVal > 0) {
+                const rowTB = createRowData('Trưng Bày', tbVal, ycVal, true);
+                if (!item.id.toString().startsWith('new-')) {
+                    itemsToUpdate.push(rowTB);
+                } else {
+                    itemsToAdd.push(rowTB);
+                }
+            } else if (thVal > 0) {
+                const rowTH = createRowData('Tiêu Hao', thVal, ycVal, true);
+                if (!item.id.toString().startsWith('new-')) {
+                    itemsToUpdate.push(rowTH);
+                } else {
+                    itemsToAdd.push(rowTH);
+                }
+            } else {
+                const rowDefault = createRowData('Tiêu Hao', 0, ycVal, true);
+                if (!item.id.toString().startsWith('new-')) {
+                    itemsToUpdate.push(rowDefault);
+                } else {
+                    itemsToAdd.push(rowDefault);
+                }
+            }
         } else {
-            itemsToUpdate.push(baseData);
+            const rowNhap = createRowData(null, parseFloat(item.sl) || 0, parseFloat(item.yc_sl) || 0, true);
+            if (!item.id.toString().startsWith('new-')) {
+                itemsToUpdate.push(rowNhap);
+            } else {
+                itemsToAdd.push(rowNhap);
+            }
         }
     });
 
@@ -1967,6 +2113,21 @@ async function handleSaveDonHang(e, printAction = null) {
         if (hasMismatch) {
             showToast('Số lượng thực nhập (SL) phải bằng Yêu Cầu (Y/c) đối với đơn Nhập Trả.', 'error');
             return;
+        }
+    }
+
+    const loai_don = document.getElementById('don-hang-modal-loai-don').value;
+    if (loai_don === 'Xuat') {
+        for (let i = 0; i < chiTietItems.length; i++) {
+            const item = chiTietItems[i];
+            if (!item) continue;
+            const tbVal = parseFloat(item.tb) || 0;
+            const thVal = parseFloat(item.th) || 0;
+            const slVal = parseFloat(item.sl) || 0;
+            if (tbVal + thVal !== slVal) {
+                showToast(`Dòng ${i + 1} (${item.ten_vt || item.ma_vt || ''}): Tổng TB (${tbVal}) và TH (${thVal}) phải bằng SL xuất (${slVal}).`, 'error');
+                return;
+            }
         }
     }
 
@@ -2681,6 +2842,21 @@ export function initDonHangView() {
     });
     document.getElementById('don-hang-modal-nganh').addEventListener('input', debounce(updateGeneratedCodes, 300));
 
+    const tbCheckbox = document.getElementById('don-hang-chi-tiet-tb-checkbox');
+    const thCheckbox = document.getElementById('don-hang-chi-tiet-th-checkbox');
+    if (tbCheckbox && thCheckbox) {
+        tbCheckbox.addEventListener('change', () => {
+            if (tbCheckbox.checked) {
+                thCheckbox.checked = false;
+            }
+        });
+        thCheckbox.addEventListener('change', () => {
+            if (thCheckbox.checked) {
+                tbCheckbox.checked = false;
+            }
+        });
+    }
+
     const dropArea = document.getElementById('don-hang-file-drop-area');
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => dropArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }));
     ['dragenter', 'dragover'].forEach(ev => dropArea.addEventListener(ev, () => dropArea.classList.add('border-indigo-500', 'bg-gray-100')));
@@ -2734,7 +2910,10 @@ export function initDonHangView() {
 
             e.preventDefault();
             const pasteData = e.clipboardData.getData('text');
-            const pastedValues = pasteData.split(/[\r\n]+/).filter(val => val.trim() !== '');
+            let pastedValues = pasteData.split(/\r?\n/);
+            if (pastedValues.length > 0 && pastedValues[pastedValues.length - 1].trim() === '') {
+                pastedValues.pop();
+            }
             if (pastedValues.length === 0) return;
 
             const targetRow = targetInput.closest('tr.chi-tiet-row');
@@ -2759,13 +2938,13 @@ export function initDonHangView() {
                     let currentItem = chiTietItems[targetIndex];
 
                     if (!currentItem) {
-                        currentItem = { id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } };
+                        currentItem = { id: `new-${Date.now()}-${Math.random()}`, tb: 0, th: 0, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } };
                         chiTietItems.push(currentItem);
                     }
 
-                    if (targetField === 'yc_sl' || targetField === 'sl') {
+                    if (targetField === 'yc_sl' || targetField === 'sl' || targetField === 'tb' || targetField === 'th') {
                         const numValue = parseInt(value, 10);
-                        currentItem[targetField] = isNaN(numValue) ? null : numValue;
+                        currentItem[targetField] = isNaN(numValue) ? 0 : numValue;
                     } else {
                         currentItem[targetField] = value;
                     }
@@ -2792,26 +2971,8 @@ export function initDonHangView() {
     }
 
     document.getElementById('don-hang-them-vat-tu-btn').addEventListener('click', () => {
-        chiTietItems.push({ id: `new-${Date.now()}-${Math.random()}`, loai: null, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } });
+        chiTietItems.push({ id: `new-${Date.now()}-${Math.random()}`, tb: 0, th: 0, sl: 0, yc_sl: 1, pendingData: { nhap: 0, xuat: 0 } });
         renderChiTietTable();
-    });
-
-    document.getElementById('don-hang-chi-tiet-fill-loai-all').addEventListener('click', () => {
-        if (chiTietItems.length < 1) return;
-        const firstItemLoai = chiTietItems[0]?.loai;
-        if (!firstItemLoai) {
-            showToast('Vui lòng chọn "Loại" cho dòng đầu tiên trước khi áp dụng cho tất cả.', 'error');
-            return;
-        }
-
-        chiTietItems.forEach(item => {
-            if (item) {
-                item.loai = firstItemLoai;
-            }
-        });
-
-        renderChiTietTable();
-        showToast(`Đã áp dụng "${firstItemLoai}" cho tất cả các dòng.`, 'success');
     });
 
     document.getElementById('don-hang-fill-sl-all-btn').addEventListener('click', () => {
@@ -2828,6 +2989,21 @@ export function initDonHangView() {
     });
 
     chiTietBody.addEventListener('click', (e) => {
+        const toggleNameBtn = e.target.closest('.toggle-name-btn');
+        if (toggleNameBtn) {
+            const cell = toggleNameBtn.closest('.chi-tiet-ten-vt-cell');
+            if (cell) {
+                cell.classList.toggle('expanded');
+                const eyeIcon = toggleNameBtn.querySelector('.eye-icon');
+                const eyeOffIcon = toggleNameBtn.querySelector('.eye-off-icon');
+                if (eyeIcon && eyeOffIcon) {
+                    eyeIcon.classList.toggle('hidden');
+                    eyeOffIcon.classList.toggle('hidden');
+                }
+            }
+            return;
+        }
+
         const deleteBtn = e.target.closest('.chi-tiet-delete-btn');
         if (deleteBtn) {
             const row = e.target.closest('tr');
@@ -2857,6 +3033,9 @@ export function initDonHangView() {
         const id = row.dataset.id;
         const field = input.dataset.field;
         let value = input.type === 'number' ? parseFloat(input.value) : input.value;
+        if (input.type === 'number' && isNaN(value)) {
+            value = 0;
+        }
         const item = chiTietItems.find(i => i && i.id == id);
 
         if (item) {
@@ -2864,9 +3043,9 @@ export function initDonHangView() {
             item[field] = value;
 
             if (field === 'yc_sl') {
-                if (value <= 0) {
-                    showToast('Yêu cầu (Y/c) phải lớn hơn 0.', 'error');
-                    item.yc_sl = oldValue || 1;
+                if (value < 0) {
+                    showToast('Yêu cầu (Y/c) không được âm.', 'error');
+                    item.yc_sl = oldValue || 0;
                 }
             } else if (field === 'sl') {
                 const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
@@ -2896,6 +3075,21 @@ export function initDonHangView() {
                 } else if (loaiDon === 'Xuat' && currentTotalInUI > stockBeforeThisOrder) {
                     showToast(`Tổng số lượng xuất (${currentTotalInUI}) vượt quá tồn kho (${stockBeforeThisOrder}).`, 'error');
                     item.sl = oldValue !== undefined ? oldValue : 0;
+                }
+            } else if (field === 'tb' || field === 'th') {
+                if (value < 0) {
+                    showToast('Số lượng không được âm.', 'error');
+                    item[field] = oldValue || 0;
+                } else {
+                    const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+                    if (loaiDon === 'Xuat') {
+                        const tbVal = field === 'tb' ? value : (item.tb || 0);
+                        const thVal = field === 'th' ? value : (item.th || 0);
+                        const rowTotal = tbVal + thVal;
+                        if (item.yc_sl && rowTotal > item.yc_sl) {
+                            showToast('Tổng TB và TH không được lớn hơn Yêu cầu (Y/c).', 'warning');
+                        }
+                    }
                 }
             }
             renderChiTietTable();
