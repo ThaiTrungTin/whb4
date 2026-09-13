@@ -1,5 +1,5 @@
 
-import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, currentUser, openAutocomplete, addJobToOfflineQueue, openPrintPreviewModal } from './app.js';
+import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, currentUser, openAutocomplete, addJobToOfflineQueue, openPrintPreviewModal, formatMaNxHtml, initResizableTable, openTonKhoFilterPopover, updateFilterButtonTexts } from './app.js';
 
 let selectedDonHangFiles = [];
 let initialExistingFiles = [];
@@ -286,15 +286,20 @@ function parseFileArray(fileData) {
 }
 
 function getTinhTrangClass(tinh_trang) {
-    let classes = 'text-[10px] font-semibold px-1 py-0.5 rounded-full ';
-    switch (tinh_trang) {
-        case 'Hết hạn sử dụng': classes += 'text-red-800 bg-red-100'; break;
-        case 'Cận date': classes += 'text-blue-800 bg-blue-100'; break;
-        case 'Còn sử dụng': classes += 'text-green-800 bg-green-100'; break;
-        case 'Hàng hư': classes += 'text-yellow-800 bg-yellow-100'; break;
-        default: classes += 'text-gray-800 bg-gray-100';
-    }
-    return classes;
+    if (!tinh_trang) return 'text-slate-400 font-normal';
+    const tt = String(tinh_trang).trim();
+    if (tt === 'Hết hạn sử dụng' || tt.toLowerCase().includes('hết hạn')) return 'text-red-600 font-bold';
+    if (tt.includes('1-30')) return 'text-rose-600 font-bold';
+    if (tt.includes('31-60')) return 'text-orange-600 font-bold';
+    if (tt.includes('61-90')) return 'text-amber-600 font-semibold';
+    if (tt.includes('91-120')) return 'text-amber-500 font-semibold';
+    if (tt.includes('121-150')) return 'text-yellow-600 font-semibold';
+    if (tt.includes('151-180')) return 'text-yellow-500 font-semibold';
+    if (tt.includes('Trên 180') || tt.includes('Còn sử dụng')) return 'text-emerald-600 font-semibold';
+    if (tt.includes('Cận date')) return 'text-rose-500 font-bold';
+    if (tt === 'Không có date' || tt.toLowerCase().includes('không')) return 'text-slate-400 font-normal';
+    if (tt === 'Hàng hư') return 'text-purple-600 font-semibold';
+    return 'text-slate-700 font-medium';
 }
 
 function closeActiveLotPopover() {
@@ -306,187 +311,276 @@ function closeActiveLotPopover() {
 }
 
 
-async function openDonHangFilterPopover(button, view) {
-    const filterKey = button.dataset.filterKey;
-    const state = viewStates[view];
+export const DON_HANG_COLUMNS = [
+    { key: 'ma_kho', label: 'Mã Kho', default: true },
+    { key: 'thoi_gian', label: 'Thời Gian', default: true },
+    { key: 'ma_nx', label: 'Mã NX', default: true },
+    { key: 'yeu_cau', label: 'Yêu Cầu', default: true },
+    { key: 'nganh', label: 'Ngành', default: true },
+    { key: 'muc_dich', label: 'Mục Đích', default: true },
+    { key: 'ghi_chu', label: 'Ghi Chú', default: true },
+    { key: 'file', label: 'File', default: true }
+];
 
-    const template = document.getElementById('filter-popover-template');
-    if (!template) return;
-    const popoverContent = template.content.cloneNode(true);
-    const popover = popoverContent.querySelector('.filter-popover');
-    document.body.appendChild(popover);
-
-    const rect = button.getBoundingClientRect();
-    popover.style.left = `${rect.left}px`;
-    popover.style.top = `${rect.bottom + window.scrollY + 5}px`;
-
-    const optionsList = popover.querySelector('.filter-options-list');
-    const applyBtn = popover.querySelector('.filter-apply-btn');
-    const searchInput = popover.querySelector('.filter-search-input');
-    const selectionCountEl = popover.querySelector('.filter-selection-count');
-    const toggleAllBtn = popover.querySelector('.filter-toggle-all-btn');
-
-    const tempSelectedOptions = new Set(state.filters[filterKey] || []);
-
-    const updateSelectionCount = () => {
-        const count = tempSelectedOptions.size;
-        selectionCountEl.textContent = count > 0 ? `Đã chọn: ${count}` : '';
-    };
-
-    const updateToggleAllButtonState = (allOptions) => {
-        if (!allOptions || allOptions.length === 0) {
-            toggleAllBtn.textContent = 'Tất cả';
-            toggleAllBtn.disabled = true;
-            return;
+export function getDonHangColumnOrder() {
+    const userKey = currentUser?.gmail || currentUser?.ho_ten || 'default';
+    try {
+        const stored = localStorage.getItem('donHangColOrder_' + userKey);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-        toggleAllBtn.disabled = false;
-        const allVisibleSelected = allOptions.every(opt => tempSelectedOptions.has(opt));
-        toggleAllBtn.textContent = allVisibleSelected ? 'Bỏ chọn' : 'Tất cả';
-    };
+    } catch (e) {
+        console.error("Error reading DonHang col order:", e);
+    }
+    return null;
+}
 
-    const renderOptions = (options) => {
-        const searchTerm = searchInput.value.toLowerCase();
-        const filteredOptions = options.filter(option =>
-            option && String(option).toLowerCase().includes(searchTerm)
-        );
-        optionsList.innerHTML = filteredOptions.length > 0 ? filteredOptions.map(option => `
-            <label class="flex items-center space-x-2 px-2 py-1 hover:bg-gray-100 rounded">
-                <input type="checkbox" value="${option}" class="filter-option-cb" ${tempSelectedOptions.has(String(option)) ? 'checked' : ''}>
-                <span class="text-sm">${option}</span>
-            </label>
-        `).join('') : '<div class="text-center p-4 text-sm text-gray-500">Không có tùy chọn.</div>';
-        updateToggleAllButtonState(filteredOptions);
-    };
+export function saveDonHangColumnOrder(colOrder) {
+    const userKey = currentUser?.gmail || currentUser?.ho_ten || 'default';
+    try {
+        localStorage.setItem('donHangColOrder_' + userKey, JSON.stringify(colOrder));
+    } catch (e) {
+        console.error("Error saving DonHang col order:", e);
+    }
+}
 
-    const setupEventListeners = (allOptions) => {
-        searchInput.addEventListener('input', () => renderOptions(allOptions));
+export function reorderDonHangTableBodyCells(table, colOrder) {
+    if (!table || !colOrder || colOrder.length === 0) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
 
-        optionsList.addEventListener('change', e => {
-            const cb = e.target;
-            if (cb.type === 'checkbox' && cb.classList.contains('filter-option-cb')) {
-                if (cb.checked) {
-                    tempSelectedOptions.add(cb.value);
-                } else {
-                    tempSelectedOptions.delete(cb.value);
-                }
-                updateSelectionCount();
-                updateToggleAllButtonState(allOptions.filter(opt => opt.toLowerCase().includes(searchInput.value.toLowerCase())));
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const cellsMap = {};
+        tr.querySelectorAll('td').forEach(td => {
+            if (td.dataset.col) {
+                cellsMap[td.dataset.col] = td;
             }
         });
 
-        toggleAllBtn.onclick = () => {
-            const searchTerm = searchInput.value.toLowerCase();
-            const visibleOptions = allOptions.filter(option =>
-                option && String(option).toLowerCase().includes(searchTerm)
-            );
+        // Cố định cột select ở đầu
+        if (cellsMap['select']) {
+            tr.appendChild(cellsMap['select']);
+        }
 
-            const isSelectAllAction = toggleAllBtn.textContent === 'Tất cả';
-
-            visibleOptions.forEach(option => {
-                if (isSelectAllAction) {
-                    tempSelectedOptions.add(String(option));
-                } else {
-                    tempSelectedOptions.delete(String(option));
-                }
-            });
-
-            renderOptions(allOptions);
-            updateSelectionCount();
-        };
-    };
-
-    updateSelectionCount();
-
-    if (filterKey === 'loai') {
-        searchInput.classList.add('hidden');
-        const options = ['Nhập', 'Xuất'];
-        renderOptions(options);
-        setupEventListeners(options);
-    } else if (filterKey === 'trang_thai_xu_ly') {
-        searchInput.classList.add('hidden');
-        const options = ['Đang xử lý', 'Đã xử lý'];
-        renderOptions(options);
-        setupEventListeners(options);
-    } else {
-        optionsList.innerHTML = '<div class="text-center p-4 text-sm text-gray-500">Đang tải...</div>';
-        applyBtn.disabled = true;
-        try {
-            let query = sb.from('don_hang').select(filterKey);
-
-            const otherFilters = { ...state.filters };
-
-            if (state.searchTerm) {
-                const st = `%${state.searchTerm}%`;
-                query = query.or(`ma_kho.ilike.${st},ma_nx.ilike.${st},yeu_cau.ilike.${st},nganh.ilike.${st},muc_dich.ilike.${st},ghi_chu.ilike.${st}`);
+        colOrder.forEach(colKey => {
+            if (colKey !== 'select' && colKey !== 'file' && cellsMap[colKey]) {
+                tr.appendChild(cellsMap[colKey]);
             }
+        });
 
-            if (otherFilters.from_date) query = query.gte('thoi_gian', otherFilters.from_date);
-            if (otherFilters.to_date) query = query.lte('thoi_gian', otherFilters.to_date);
+        // Cố định cột file ở cuối bên phải
+        if (cellsMap['file']) {
+            tr.appendChild(cellsMap['file']);
+        }
+    });
+}
 
-            if (filterKey !== 'loai' && otherFilters.loai?.length === 1) {
-                const loaiPrefix = otherFilters.loai[0] === 'Nhập' ? 'IN.%' : 'OUT.%';
-                query = query.ilike('ma_kho', loaiPrefix);
+export function applyDonHangColumnOrder(table) {
+    if (!table) table = document.getElementById('don-hang-table') || document.querySelector('#view-don-hang table');
+    if (!table) return;
+
+    const colOrder = getDonHangColumnOrder();
+    if (!colOrder) return;
+
+    const theadTr = table.querySelector('thead tr');
+    if (theadTr) {
+        const thsMap = {};
+        theadTr.querySelectorAll('th').forEach(th => {
+            if (th.dataset.col) thsMap[th.dataset.col] = th;
+        });
+
+        // Cố định cột select ở đầu
+        if (thsMap['select']) {
+            theadTr.appendChild(thsMap['select']);
+        }
+
+        colOrder.forEach(colKey => {
+            if (colKey !== 'select' && colKey !== 'file' && thsMap[colKey]) {
+                theadTr.appendChild(thsMap[colKey]);
             }
+        });
 
-            if (filterKey !== 'trang_thai_xu_ly' && otherFilters.trang_thai_xu_ly?.length === 1) {
-                if (otherFilters.trang_thai_xu_ly[0] === 'Đang xử lý') {
-                    query = query.like('ma_nx', '%-');
-                } else if (otherFilters.trang_thai_xu_ly[0] === 'Đã xử lý') {
-                    query = query.not('ma_nx', 'like', '%-');
-                }
-            }
-            if (filterKey !== 'ma_kho' && otherFilters.ma_kho?.length > 0) query = query.in('ma_kho', otherFilters.ma_kho);
-            if (filterKey !== 'ma_nx' && otherFilters.ma_nx?.length > 0) query = query.in('ma_nx', otherFilters.ma_nx);
-            if (filterKey !== 'yeu_cau' && otherFilters.yeu_cau?.length > 0) query = query.in('yeu_cau', otherFilters.yeu_cau);
-            if (filterKey !== 'nganh' && otherFilters.nganh?.length > 0) query = query.in('nganh', otherFilters.nganh);
-
-            const { data, error } = await query.limit(1000);
-            if (error) throw error;
-
-            const uniqueOptions = [...new Set(data.map(item => item[filterKey]).filter(Boolean))].sort();
-            renderOptions(uniqueOptions);
-            setupEventListeners(uniqueOptions);
-            applyBtn.disabled = false;
-
-        } catch (error) {
-            console.error("Filter error:", error);
-            optionsList.innerHTML = '<div class="text-center p-4 text-sm text-red-500">Lỗi tải dữ liệu.</div>';
-            showToast(`Lỗi tải bộ lọc cho: ${filterKey}.`, 'error');
+        // Cố định cột file ở cuối bên phải
+        if (thsMap['file']) {
+            theadTr.appendChild(thsMap['file']);
         }
     }
 
-    const closePopover = (e) => {
-        if (!popover.contains(e.target) && e.target !== button) {
-            popover.remove();
-            document.removeEventListener('click', closePopover);
+    reorderDonHangTableBodyCells(table, colOrder);
+}
+
+export function initSortableDonHangColumns(table) {
+    if (!table || typeof Sortable === 'undefined') return;
+    const theadTr = table.querySelector('thead tr');
+    if (!theadTr) return;
+
+    if (theadTr._sortableInstance) {
+        theadTr._sortableInstance.destroy();
+    }
+
+    theadTr._sortableInstance = Sortable.create(theadTr, {
+        animation: 200,
+        draggable: 'th:not(.no-drag)',
+        filter: '.col-resizer, .filter-btn, .sort-btn, input, .no-drag, [data-col="select"], [data-col="file"]',
+        preventOnFilter: false,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        onEnd: function () {
+            const colOrder = Array.from(theadTr.querySelectorAll('th')).map(th => th.dataset.col).filter(Boolean);
+            saveDonHangColumnOrder(colOrder);
+            reorderDonHangTableBodyCells(table, colOrder);
+            showToast('Đã lưu thứ tự cột Đơn Hàng', 'success');
         }
+    });
+}
+
+export function getDonHangColumnVisibility() {
+    try {
+        const stored = localStorage.getItem('donHangColumnVisibility');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            const visibility = {};
+            DON_HANG_COLUMNS.forEach(col => {
+                visibility[col.key] = parsed[col.key] !== undefined ? parsed[col.key] : col.default;
+            });
+            return visibility;
+        }
+    } catch (e) {
+        console.error("Error reading DonHang column visibility:", e);
+    }
+    const defaultVis = {};
+    DON_HANG_COLUMNS.forEach(col => {
+        defaultVis[col.key] = col.default;
+    });
+    return defaultVis;
+}
+
+export function saveDonHangColumnVisibility(visibility) {
+    try {
+        localStorage.setItem('donHangColumnVisibility', JSON.stringify(visibility));
+    } catch (e) {
+        console.error("Error saving DonHang column visibility:", e);
+    }
+}
+
+export function applyDonHangColumnState() {
+    const table = document.getElementById('don-hang-table') || document.querySelector('#view-don-hang table');
+    if (!table) return;
+
+    const visibility = getDonHangColumnVisibility();
+
+    DON_HANG_COLUMNS.forEach(col => {
+        const isVisible = visibility[col.key] !== false;
+        const thElements = table.querySelectorAll(`th[data-col="${col.key}"]`);
+        const tdElements = table.querySelectorAll(`td[data-col="${col.key}"]`);
+
+        thElements.forEach(el => el.classList.toggle('hidden', !isVisible));
+        tdElements.forEach(el => el.classList.toggle('hidden', !isVisible));
+    });
+}
+
+export function updateDonHangSortButtonUI() {
+    const state = viewStates['view-don-hang'];
+    if (!state) return;
+    const currentSort = state.sortBy;
+    const isAsc = state.sortAsc;
+
+    const table = document.getElementById('don-hang-table') || document.querySelector('#view-don-hang table');
+    if (!table) return;
+
+    table.querySelectorAll('.sort-btn').forEach(btn => {
+        const sortKey = btn.dataset.sortKey;
+        if (sortKey === currentSort && (isAsc === true || isAsc === false)) {
+            if (isAsc === true) {
+                btn.classList.add('sort-asc');
+                btn.classList.remove('sort-desc');
+            } else {
+                btn.classList.add('sort-desc');
+                btn.classList.remove('sort-asc');
+            }
+        } else {
+            btn.classList.remove('sort-asc', 'sort-desc');
+        }
+    });
+}
+
+export function initDonHangColumnsModal() {
+    const modal = document.getElementById('don-hang-columns-modal');
+    const openBtn = document.getElementById('don-hang-btn-columns');
+    const closeBtn = document.getElementById('don-hang-columns-modal-close');
+    const cancelBtn = document.getElementById('don-hang-columns-cancel-btn');
+    const applyBtn = document.getElementById('don-hang-columns-apply-btn');
+    const selectAllBtn = document.getElementById('don-hang-columns-select-all');
+    const resetDefaultBtn = document.getElementById('don-hang-columns-reset-default');
+    const listContainer = document.getElementById('don-hang-columns-checkbox-list');
+
+    if (!modal || !openBtn) return;
+
+    const renderCheckboxes = (visibility) => {
+        if (!listContainer) return;
+        listContainer.innerHTML = DON_HANG_COLUMNS.map(col => `
+            <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-100 cursor-pointer border border-transparent hover:border-gray-200 transition-all select-none">
+                <input type="checkbox" data-col-key="${col.key}" ${visibility[col.key] !== false ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer">
+                <span class="font-medium text-gray-800">${col.label}</span>
+            </label>
+        `).join('');
     };
 
-    applyBtn.onclick = () => {
-        state.filters[filterKey] = [...tempSelectedOptions];
-
-        const defaultText = filterButtonDefaultTexts[button.id] || button.id;
-        button.textContent = tempSelectedOptions.size > 0 ? `${defaultText} (${tempSelectedOptions.size})` : defaultText;
-
-        fetchDonHang(1);
-
-        popover.remove();
-        document.removeEventListener('click', closePopover);
+    openBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentVis = getDonHangColumnVisibility();
+        renderCheckboxes(currentVis);
+        modal.classList.remove('hidden');
     };
 
-    setTimeout(() => document.addEventListener('click', closePopover), 0);
+    const closeModal = () => modal.classList.add('hidden');
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+
+    if (selectAllBtn) {
+        selectAllBtn.onclick = (e) => {
+            e.preventDefault();
+            listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+        };
+    }
+
+    if (resetDefaultBtn) {
+        resetDefaultBtn.onclick = (e) => {
+            e.preventDefault();
+            const defaults = {};
+            DON_HANG_COLUMNS.forEach(c => defaults[c.key] = c.default);
+            renderCheckboxes(defaults);
+        };
+    }
+
+    if (applyBtn) {
+        applyBtn.onclick = (e) => {
+            e.preventDefault();
+            const newVis = {};
+            listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                newVis[cb.dataset.colKey] = cb.checked;
+            });
+            saveDonHangColumnVisibility(newVis);
+            applyDonHangColumnState();
+            closeModal();
+            showToast('Đã lưu cấu hình cột hiển thị!', 'success');
+        };
+    }
 }
 
 function buildDonHangQuery() {
     const state = viewStates['view-don-hang'];
     let query = sb.from('don_hang').select('*', { count: 'exact' });
 
-    if (currentUser.phan_quyen === 'View') {
+    if (currentUser?.phan_quyen === 'View') {
         query = query.eq('yeu_cau', currentUser.ho_ten);
     }
 
     if (state.filters.from_date) query = query.gte('thoi_gian', state.filters.from_date);
-    if (state.filters.to_date) query = query.lte('thoi_gian', state.filters.to_date);
+    if (state.filters.to_date) query = query.lte('thoi_gian', state.filters.to_date + 'T23:59:59');
 
     if (state.filters.loai?.length === 1) {
         const loaiPrefix = state.filters.loai[0] === 'Nhập' ? 'IN.%' : 'OUT.%';
@@ -502,9 +596,12 @@ function buildDonHangQuery() {
         }
     }
     if (state.filters.ma_kho?.length > 0) query = query.in('ma_kho', state.filters.ma_kho);
+    if (state.filters.thoi_gian?.length > 0) query = query.in('thoi_gian', state.filters.thoi_gian);
     if (state.filters.ma_nx?.length > 0) query = query.in('ma_nx', state.filters.ma_nx);
     if (state.filters.yeu_cau?.length > 0) query = query.in('yeu_cau', state.filters.yeu_cau);
     if (state.filters.nganh?.length > 0) query = query.in('nganh', state.filters.nganh);
+    if (state.filters.muc_dich?.length > 0) query = query.in('muc_dich', state.filters.muc_dich);
+    if (state.filters.ghi_chu?.length > 0) query = query.in('ghi_chu', state.filters.ghi_chu);
 
     if (state.searchTerm) {
         const st = `%${state.searchTerm}%`;
@@ -534,7 +631,9 @@ export async function fetchDonHang(page = viewStates['view-don-hang'].currentPag
             throw new Error('Invalid query builder');
         }
 
-        const { data, error, count } = await queryBuilder.order('thoi_gian', { ascending: false }).range(from, to);
+        const sortBy = state.sortBy || 'thoi_gian';
+        const sortAsc = state.sortAsc !== undefined ? state.sortAsc : false;
+        const { data, error, count } = await queryBuilder.order(sortBy, { ascending: sortAsc, nullsFirst: false }).range(from, to);
 
         if (error) {
             console.error(error);
@@ -546,6 +645,7 @@ export async function fetchDonHang(page = viewStates['view-don-hang'].currentPag
             renderDonHangTable(data);
             renderPagination('don-hang', count, from, to);
             updateDonHangSelectionInfo();
+            updateFilterButtonTexts('don-hang');
         }
     } catch (err) {
         console.error("Fetch Don Hang failed:", err);
@@ -557,6 +657,7 @@ export async function fetchDonHang(page = viewStates['view-don-hang'].currentPag
 function renderDonHangTable(data) {
     const tableBody = document.getElementById('don-hang-table-body');
     if (!tableBody) return;
+    const table = document.getElementById('don-hang-table') || document.querySelector('#view-don-hang table');
 
     if (data && data.length > 0) {
         tableBody.innerHTML = data.map(dh => {
@@ -566,9 +667,9 @@ function renderDonHangTable(data) {
             const fileCount = filesAsArray.length;
 
             const fileIcon = fileCount > 0 ?
-                `<div class="relative cursor-pointer w-8 h-8 mx-auto">
-                    <svg class="w-8 h-8 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
-                    <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">${fileCount}</span>
+                `<div class="relative cursor-pointer w-8 h-8 mx-auto flex items-center justify-center">
+                    <svg class="w-7 h-7 text-yellow-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
+                    <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center leading-none shadow-sm">${fileCount}</span>
                  </div>` : '';
 
             let maKhoIcon = '';
@@ -578,34 +679,27 @@ function renderDonHangTable(data) {
                 maKhoIcon = `<svg class="w-4 h-4 inline-block ml-1 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>`;
             }
             const maKhoHtml = `<div class="flex items-center justify-center">
-                <span class="text-blue-600 hover:underline">${dh.ma_kho}</span>
+                <span class="text-blue-600 hover:underline font-semibold">${dh.ma_kho}</span>
                 ${maKhoIcon}
             </div>`;
 
-            let maNxClass = '';
-            if (dh.ma_nx) {
-                if (dh.ma_nx.endsWith('-')) {
-                    maNxClass = 'text-yellow-600 font-semibold';
-                } else {
-                    maNxClass = 'text-green-600 font-semibold';
-                }
-            }
-
             return `
                 <tr data-id="${dh.ma_kho}" class="hover:bg-gray-50 ${isSelected ? 'bg-blue-100' : ''}">
-                    <td class="px-1 py-2 border border-gray-300 text-center"><input type="checkbox" class="don-hang-select-row" data-id="${dh.ma_kho}" ${isSelected ? 'checked' : ''}></td>
-                    <td class="px-1 py-2 text-sm font-medium border border-gray-300 text-center cursor-pointer ma-kho-cell">${maKhoHtml}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center whitespace-nowrap">${thoi_gian}</td>
-                    <td class="px-1 py-2 text-sm border border-gray-300 text-center right-click-edit-cell" data-field="ma_nx">
-                        <div class="cell-content ${maNxClass} cursor-help font-bold" title="Chuột phải để sửa">${dh.ma_nx || ''}</div>
+                    <td class="px-1 py-2 border border-gray-300 text-center select-none" data-col="select"><input type="checkbox" class="don-hang-select-row cursor-pointer" data-id="${dh.ma_kho}" ${isSelected ? 'checked' : ''}></td>
+                    <td class="px-2 py-2 text-sm font-medium border border-gray-300 text-center cursor-pointer ma-kho-cell" data-col="ma_kho">${maKhoHtml}</td>
+                    <td class="px-2 py-2 text-sm text-gray-600 border border-gray-300 text-center whitespace-nowrap" data-col="thoi_gian">${thoi_gian}</td>
+                    <td class="px-2 py-2 text-sm border border-gray-300 text-center right-click-edit-cell" data-col="ma_nx" data-field="ma_nx">
+                        <div class="cell-content cursor-help font-bold" title="Chuột phải để sửa">${formatMaNxHtml(dh.ma_nx)}</div>
                     </td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.yeu_cau || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-center">${dh.nganh || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left whitespace-pre-wrap min-w-[80px]">${dh.muc_dich || ''}</td>
-                    <td class="px-1 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-field="ghi_chu">
-                        <div class="note-container">
-                            <div class="cell-content cursor-help whitespace-pre-wrap min-w-[550px] line-clamp-2" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
-                            <div class="flex items-center gap-2 mt-1">
+                    <td class="px-2 py-2 text-sm text-gray-600 border border-gray-300 text-center" data-col="yeu_cau">${dh.yeu_cau || ''}</td>
+                    <td class="px-2 py-2 text-sm text-gray-600 border border-gray-300 text-center" data-col="nganh">${dh.nganh || ''}</td>
+                    <td class="px-2 py-2 text-sm text-gray-600 border border-gray-300 text-left" data-col="muc_dich" title="${(dh.muc_dich || '').replace(/"/g, '&quot;')}">
+                        <div class="muc-dich-content line-clamp-2">${dh.muc_dich || ''}</div>
+                    </td>
+                    <td class="px-2 py-2 text-sm text-gray-600 border border-gray-300 text-left right-click-edit-cell" data-col="ghi_chu" data-field="ghi_chu" title="${(dh.ghi_chu || '').replace(/"/g, '&quot;')}">
+                        <div class="note-container flex flex-col justify-center">
+                            <div class="cell-content cursor-help" title="Chuột phải để sửa">${dh.ghi_chu || ''}</div>
+                            <div class="note-footer flex items-center gap-2 mt-0.5">
                                 ${calculateTotalKien(dh.ghi_chu) > 0 ? `<span class="font-black text-black text-xs">Tổng : ${calculateTotalKien(dh.ghi_chu)} Kiện</span>` : ''}
                                 ${dh.ghi_chu ? `
                                     <button type="button" class="toggle-note-btn text-blue-600 font-bold hover:underline text-xs" onclick="event.stopPropagation(); window.toggleNote(this)">Xem thêm</button>
@@ -613,7 +707,7 @@ function renderDonHangTable(data) {
                             </div>
                         </div>
                     </td>
-                    <td class="px-3 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell outline-none focus:ring-2 focus:ring-blue-300" tabindex="0">
+                    <td class="px-2 py-2 border border-gray-300 text-center file-cell relative group dropzone-cell outline-none focus:ring-2 focus:ring-blue-300" data-col="file" tabindex="0">
                         <div class="inline-file-upload-overlay absolute inset-0 bg-blue-500 bg-opacity-5 hidden group-hover:flex items-center justify-center pointer-events-none">
                             <svg class="w-4 h-4 text-blue-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                         </div>
@@ -623,10 +717,17 @@ function renderDonHangTable(data) {
             `;
         }).join('');
 
-        // Sau khi render xong, kiểm tra xem ghi chú nào bị ẩn thì mới hiện nút "Xem thêm"
+        if (table) {
+            applyDonHangColumnOrder(table);
+            applyDonHangColumnState();
+            updateDonHangSortButtonUI();
+            initResizableTable(table, 'don_hang_col_widths');
+        }
+
         checkNotesOverflow();
+        setTimeout(checkNotesOverflow, 100);
     } else {
-        tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4">Không có dữ liệu</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-gray-500">Không có dữ liệu đơn hàng</td></tr>';
     }
 }
 
@@ -637,9 +738,15 @@ function checkNotesOverflow() {
     containers.forEach(container => {
         const content = container.querySelector('.cell-content');
         const btn = container.querySelector('.toggle-note-btn');
-        if (btn && content.scrollHeight <= content.offsetHeight + 2) {
-            btn.style.display = 'none';
+        if (!btn || !content) return;
+        
+        if (container.classList.contains('expanded')) {
+            btn.style.display = 'inline-block';
+            return;
         }
+
+        const isOverflowing = content.scrollHeight > content.clientHeight + 2 || (content.textContent && content.textContent.split('\n').length > 2);
+        btn.style.display = isOverflowing ? 'inline-block' : 'none';
     });
 }
 
@@ -1005,6 +1112,37 @@ function handleSmartTabNavigation(event) {
     }
 }
 
+function parseDateDDMMYYYY(dateString) {
+    if (!dateString || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return null;
+    const parts = dateString.split('/');
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+    if (year < 1000 || year > 9999 || month === 0 || month > 12) return null;
+    const monthLength = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year % 400 === 0 || (year % 100 !== 0 && year % 4 === 0)) {
+        monthLength[1] = 29;
+    }
+    if (day <= 0 || day > monthLength[month - 1]) return null;
+    const date = new Date(year, month - 1, day);
+    return isNaN(date.getTime()) ? null : date;
+}
+
+function calculateTinhTrangFromDate(dateStr) {
+    const dateValue = parseDateDDMMYYYY(dateStr);
+    if (!dateValue) return 'Còn sử dụng';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const threeMonthsFromNow = new Date();
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+    if (dateValue <= today) {
+        return 'Hết hạn sử dụng';
+    } else if (dateValue > today && dateValue <= threeMonthsFromNow) {
+        return 'Cận date';
+    }
+    return 'Còn sử dụng';
+}
+
 function openLotSelectorPopover(inputElement, item) {
     closeActiveLotPopover();
 
@@ -1014,7 +1152,7 @@ function openLotSelectorPopover(inputElement, item) {
     const popoverContent = popoverTemplate.content.cloneNode(true);
     const popover = popoverContent.querySelector('div');
     popover.id = 'lot-selector-popover';
-    popover.style.width = `380px`;
+    popover.style.width = `390px`;
     popover.classList.remove('max-h-60');
 
     const rect = inputElement.getBoundingClientRect();
@@ -1036,7 +1174,206 @@ function openLotSelectorPopover(inputElement, item) {
 
     const searchInput = searchWrapper.querySelector('.lot-search-input');
     const optionsList = popover.querySelector('.autocomplete-options-list');
-    optionsList.classList.add('max-h-64', 'overflow-y-auto');
+    optionsList.classList.add('max-h-60', 'overflow-y-auto');
+
+    // Tạo phần chân Popover: Cho phép thêm LOT & Date mới ngay tại đây
+    const addSection = document.createElement('div');
+    addSection.className = 'p-2.5 border-t border-slate-200 bg-slate-50 sticky bottom-0 z-20 rounded-b-lg';
+    addSection.innerHTML = `
+        <div id="lot-add-toggle-container">
+            <button type="button" id="lot-show-add-form-btn" class="w-full py-2 px-3 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50/80 hover:bg-blue-100/80 rounded-lg border border-blue-200/80 flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-[0.98]">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                + Thêm LOT &amp; Date mới
+            </button>
+        </div>
+        <div id="lot-add-form" class="hidden space-y-2.5 pt-1">
+            <div class="text-xs font-bold text-slate-700 flex justify-between items-center">
+                <span>Nhập LOT &amp; Hạn dùng mới:</span>
+                <button type="button" id="lot-hide-add-form-btn" class="text-slate-400 hover:text-slate-600 text-sm font-bold px-1 rounded hover:bg-slate-200 transition-colors">&times;</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">LOT <span class="text-rose-500">*</span></label>
+                    <input type="text" id="new-lot-val-input" placeholder="VD: LOT123" class="w-full p-2 text-xs border border-slate-300 rounded-lg uppercase font-medium focus:ring-2 focus:ring-blue-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Date <span class="text-rose-500">*</span> (dd/mm/yyyy)</label>
+                    <input type="text" id="new-date-val-input" placeholder="dd/mm/yyyy" maxlength="10" class="w-full p-2 text-xs border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-blue-400 outline-none">
+                </div>
+            </div>
+            <button type="button" id="new-lot-confirm-btn" class="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 text-xs font-semibold rounded-lg shadow-sm hover:shadow flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]">
+                <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                Xác nhận dùng LOT mới này
+            </button>
+        </div>
+    `;
+    popover.appendChild(addSection);
+
+    const showAddFormBtn = addSection.querySelector('#lot-show-add-form-btn');
+    const hideAddFormBtn = addSection.querySelector('#lot-hide-add-form-btn');
+    const addFormEl = addSection.querySelector('#lot-add-form');
+    const toggleContainer = addSection.querySelector('#lot-add-toggle-container');
+    const newLotInput = addSection.querySelector('#new-lot-val-input');
+    const newDateInput = addSection.querySelector('#new-date-val-input');
+    const newLotConfirmBtn = addSection.querySelector('#new-lot-confirm-btn');
+
+    const toggleNewLotForm = (show) => {
+        if (show) {
+            toggleContainer.classList.add('hidden');
+            addFormEl.classList.remove('hidden');
+            if (searchInput.value.trim() && !newLotInput.value.trim()) {
+                newLotInput.value = searchInput.value.trim().toUpperCase();
+            }
+            setTimeout(() => newLotInput.focus(), 50);
+        } else {
+            toggleContainer.classList.remove('hidden');
+            addFormEl.classList.add('hidden');
+        }
+    };
+
+    showAddFormBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleNewLotForm(true);
+    });
+
+    hideAddFormBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleNewLotForm(false);
+    });
+
+    // Validation khi thay đổi ngày giống hệt ở Tồn Kho
+    newDateInput.addEventListener('change', (e) => {
+        const input = e.target;
+        const val = input.value.trim();
+        const dateValue = parseDateDDMMYYYY(val);
+        if (val && !dateValue) {
+            showToast('Ngày không hợp lệ. Vui lòng nhập đúng dd/mm/yyyy.', 'error');
+            input.classList.add('border-red-500');
+        } else {
+            input.classList.remove('border-red-500');
+        }
+    });
+
+    const handleConfirmNewLot = async () => {
+        const lotVal = (newLotInput.value || '').trim().toUpperCase();
+        const dateVal = (newDateInput.value || '').trim();
+
+        if (!item.ma_vt) {
+            showToast('Vui lòng nhập Mã VT trước khi thêm LOT.', 'error');
+            return;
+        }
+
+        if (!lotVal) {
+            showToast('Vui lòng nhập LOT.', 'error');
+            newLotInput.focus();
+            return;
+        }
+
+        const parsedDate = parseDateDDMMYYYY(dateVal);
+        if (!parsedDate) {
+            showToast('Ngày hết hạn không hợp lệ. Vui lòng nhập định dạng dd/mm/yyyy (ví dụ: 31/12/2026).', 'error');
+            newDateInput.focus();
+            return;
+        }
+
+        const dateParts = dateVal.split('/');
+        const formattedDate = `${dateParts[0]}.${dateParts[1]}.${dateParts[2]}`;
+        const newMaVach = [item.ma_vt, lotVal, formattedDate].join('');
+
+        // Lấy ngành đang chọn trong form
+        const currentNganh = document.getElementById('don-hang-modal-nganh')?.value?.trim() || '';
+
+        // Đối chiếu view sản phẩm để lấy tên người phụ trách và tên vật tư
+        let phuTrach = item.phu_trach || '';
+        let tenVt = item.ten_vt || '';
+
+        try {
+            let spQuery = sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', item.ma_vt);
+            if (currentNganh) {
+                spQuery = spQuery.eq('nganh', currentNganh);
+            }
+            const { data: spList } = await spQuery.limit(1);
+            if (spList && spList.length > 0) {
+                phuTrach = spList[0].phu_trach || '';
+                tenVt = spList[0].ten_vt || tenVt;
+            } else {
+                const { data: fallbackSp } = await sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', item.ma_vt).limit(1);
+                if (fallbackSp && fallbackSp.length > 0) {
+                    phuTrach = fallbackSp[0].phu_trach || '';
+                    tenVt = fallbackSp[0].ten_vt || tenVt;
+                }
+            }
+        } catch (err) {
+            console.error("Lỗi tra cứu san_pham cho LOT mới:", err);
+        }
+
+        const tinhTrang = calculateTinhTrangFromDate(dateVal);
+
+        const newLotOptionData = {
+            ma_vach: newMaVach,
+            ma_vt: item.ma_vt,
+            lot: lotVal,
+            date: dateVal,
+            ten_vt: tenVt,
+            tinh_trang: tinhTrang,
+            ton_cuoi: 0,
+            ton_dau: 0,
+            nhap: 0,
+            xuat: 0,
+            tray: '',
+            nganh: currentNganh,
+            phu_trach: phuTrach,
+            pendingData: { nhap: 0, xuat: 0 },
+            isNewLot: true
+        };
+
+        if (!item.lotOptions) item.lotOptions = [];
+        if (!item.lotOptions.some(o => o.ma_vach === newMaVach)) {
+            item.lotOptions.unshift(newLotOptionData);
+        }
+
+        item.ma_vach = newMaVach;
+        item.date = dateVal;
+        item.lot = lotVal;
+        item.ten_vt = tenVt;
+        item.nganh = currentNganh;
+        item.phu_trach = phuTrach;
+        item.tonKhoData = newLotOptionData;
+        item.pendingData = { nhap: 0, xuat: 0 };
+        item.ma_vach_valid = true;
+        item.isNewLot = true;
+
+        const loaiDon = document.getElementById('don-hang-modal-loai-don').value;
+        const requestedQty = parseFloat(item.yc_sl) || 0;
+        const isTbChecked = document.getElementById('don-hang-chi-tiet-tb-checkbox')?.checked;
+        const isThChecked = document.getElementById('don-hang-chi-tiet-th-checkbox')?.checked;
+
+        item.sl = requestedQty;
+        if (isTbChecked) item.tb = requestedQty;
+        if (isThChecked) item.th = requestedQty;
+
+        closeActiveLotPopover();
+        renderChiTietTable();
+        showToast(`Đã áp dụng LOT mới: ${lotVal} (${dateVal})`, 'success');
+    };
+
+    newLotConfirmBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleConfirmNewLot();
+    });
+
+    [newLotInput, newDateInput].forEach(inp => {
+        inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleConfirmNewLot();
+            }
+        });
+    });
 
     const renderOptions = (searchTerm = '') => {
         const lowerSearch = searchTerm.toLowerCase();
@@ -1070,12 +1407,11 @@ function openLotSelectorPopover(inputElement, item) {
             optionsList.innerHTML = filteredOptions.map(opt => {
                 const tonKhoClass = opt.ton_cuoi > 0 ? 'text-green-600' : 'text-red-600';
                 const tinhTrangClass = getTinhTrangClass(opt.tinh_trang);
-                // const pnd = opt.pendingData || { nhap: 0, xuat: 0 }; // Không hiển thị pending nữa
 
                 return `
                     <div class="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b last:border-b-0 lot-option" data-ma-vach="${opt.ma_vach}">
                         <div class="flex justify-between items-center text-sm font-medium gap-2">
-                            <span class="flex-1 text-left">LOT: ${opt.lot || 'Chưa có LOT'}</span>
+                            <span class="flex-1 text-left font-semibold">LOT: ${opt.lot || 'Chưa có LOT'}</span>
                             <div class="flex-1 flex justify-center items-center gap-2">
                                 <span class="text-green-600 font-semibold" title="Tổng Nhập">N:${opt.nhap || 0}</span>
                                 <span class="text-red-600 font-semibold" title="Tổng Xuất">X:${opt.xuat || 0}</span>
@@ -1091,7 +1427,23 @@ function openLotSelectorPopover(inputElement, item) {
                 `;
             }).join('');
         } else {
-            optionsList.innerHTML = '<div class="p-4 text-center text-sm text-gray-500 italic">Không tìm thấy LOT nào phù hợp.</div>';
+            optionsList.innerHTML = `
+                <div class="p-4 text-center text-sm text-gray-500">
+                    <p class="italic mb-2">Không tìm thấy LOT nào phù hợp.</p>
+                    <button type="button" class="lot-quick-add-btn text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 inline-flex items-center gap-1 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Thêm LOT &amp; Date mới
+                    </button>
+                </div>
+            `;
+            const quickBtn = optionsList.querySelector('.lot-quick-add-btn');
+            if (quickBtn) {
+                quickBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleNewLotForm(true);
+                });
+            }
         }
     };
 
@@ -1632,6 +1984,14 @@ export async function openDonHangModal(dh = null, mode = 'add') {
 
     form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = isViewMode);
     maNxInput.disabled = false;
+
+    const quickSearchInput = document.getElementById('don-hang-quick-search-stock');
+    if (quickSearchInput) {
+        quickSearchInput.value = '';
+        quickSearchInput.disabled = isViewMode;
+    }
+    document.getElementById('don-hang-quick-search-clear')?.classList.add('hidden');
+    document.getElementById('don-hang-quick-search-dropdown')?.classList.add('hidden');
 
     document.getElementById('don-hang-file-drop-area').style.display = isViewMode ? 'none' : 'flex';
     document.getElementById('don-hang-them-vat-tu-btn').classList.toggle('hidden', isViewMode || isNhapTraMode || !(currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User'));
@@ -2307,6 +2667,70 @@ async function handleSaveDonHang(e, printAction = null) {
             : await sb.from('don_hang').insert(donHangData);
         if (donHangError) throw donHangError;
 
+        // Tự động kiểm tra và lưu các LOT mới vào bảng tồn kho (ton_kho) nếu chưa tồn tại
+        const allMaVachs = [...new Set(chiTietItems.filter(i => i && i.ma_vach).map(i => i.ma_vach))];
+        if (allMaVachs.length > 0) {
+            const { data: existingRows } = await sb.from('ton_kho').select('ma_vach').in('ma_vach', allMaVachs);
+            const existingMaVachSet = new Set((existingRows || []).map(r => r.ma_vach));
+
+            const newTonKhoToInsert = [];
+            for (const item of chiTietItems) {
+                if (!item || !item.ma_vach || existingMaVachSet.has(item.ma_vach)) continue;
+
+                existingMaVachSet.add(item.ma_vach);
+
+                let phuTrach = item.phu_trach || '';
+                let tenVt = item.ten_vt || '';
+                let nganh = item.nganh || donHangData.nganh || '';
+
+                if (!phuTrach || !tenVt) {
+                    let spQuery = sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', item.ma_vt);
+                    if (nganh) {
+                        spQuery = spQuery.eq('nganh', nganh);
+                    }
+                    const { data: spData } = await spQuery.limit(1);
+                    if (spData && spData.length > 0) {
+                        if (!phuTrach) phuTrach = spData[0].phu_trach || '';
+                        if (!tenVt) tenVt = spData[0].ten_vt || '';
+                        if (!nganh) nganh = spData[0].nganh || '';
+                    } else {
+                        const { data: fallbackSp } = await sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', item.ma_vt).limit(1);
+                        if (fallbackSp && fallbackSp.length > 0) {
+                            if (!phuTrach) phuTrach = fallbackSp[0].phu_trach || '';
+                            if (!tenVt) tenVt = fallbackSp[0].ten_vt || '';
+                            if (!nganh) nganh = fallbackSp[0].nganh || '';
+                        }
+                    }
+                }
+
+                const tinhTrang = calculateTinhTrangFromDate(item.date);
+
+                newTonKhoToInsert.push({
+                    ma_vach: item.ma_vach,
+                    ma_vt: item.ma_vt,
+                    ten_vt: tenVt,
+                    lot: item.lot,
+                    date: item.date,
+                    ton_dau: 0,
+                    nhap: 0,
+                    xuat: 0,
+                    ton_cuoi: 0,
+                    tinh_trang: tinhTrang,
+                    tray: item.tray || '',
+                    nganh: nganh,
+                    phu_trach: phuTrach,
+                    note: ''
+                });
+            }
+
+            if (newTonKhoToInsert.length > 0) {
+                const { error: insertTonKhoError } = await sb.from('ton_kho').upsert(newTonKhoToInsert, { onConflict: 'ma_vach', ignoreDuplicates: true });
+                if (insertTonKhoError) {
+                    console.error("Lỗi khi lưu LOT mới vào tồn kho:", insertTonKhoError);
+                }
+            }
+        }
+
         await syncChiTietDonHang(donHangData.ma_kho, { ...donHangData, loai_don });
 
         // Nếu là đơn Nhập/Nhập Trả: cập nhật Tray vào tồn kho theo ma_vach
@@ -2511,9 +2935,19 @@ async function updateItemFromMaVt(item, ma_vt) {
         item.lotOptions = adjustedLotData;
         item.ten_vt = adjustedLotData[0]?.ten_vt || '';
     } else {
-        const { data: sanPham } = await sb.from('san_pham').select('ten_vt').eq('ma_vt', ma_vt).single();
+        const currentNganh = document.getElementById('don-hang-modal-nganh')?.value || '';
+        let spQuery = sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', ma_vt);
+        if (currentNganh) spQuery = spQuery.eq('nganh', currentNganh);
+        const { data: sanPhamList } = await spQuery.limit(1);
+        let sanPham = sanPhamList && sanPhamList[0];
+        if (!sanPham) {
+            const { data: fallbackList } = await sb.from('san_pham').select('ten_vt, phu_trach, nganh').eq('ma_vt', ma_vt).limit(1);
+            sanPham = fallbackList && fallbackList[0];
+        }
         item.ten_vt = sanPham?.ten_vt || 'Không rõ';
-        showToast(`Không có tồn kho cho Mã VT: ${ma_vt}`, 'info');
+        item.nganh = sanPham?.nganh || currentNganh;
+        item.phu_trach = sanPham?.phu_trach || '';
+        showToast(`Chưa có LOT trong tồn kho cho Mã VT: ${ma_vt}. Bạn có thể chọn ô LOT để thêm LOT mới.`, 'info');
     }
     return item;
 }
@@ -2607,38 +3041,115 @@ async function closeDonHangModalWithConfirm() {
 
 export function initDonHangView() {
     const viewContainer = document.getElementById('view-don-hang');
-    const isAdminOrUser = currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User';
-    viewContainer.querySelectorAll('.dh-admin-only').forEach(el => el.classList.toggle('hidden', !isAdminOrUser));
+    const role = currentUser?.phan_quyen;
+    const isAdminOrUser = role === 'Admin' || role === 'User';
+    if (viewContainer) {
+        viewContainer.querySelectorAll('.dh-admin-only').forEach(el => el.classList.toggle('hidden', !isAdminOrUser));
+    }
+
+    initDonHangQuickStockSearch();
+
+    const table = document.getElementById('don-hang-table') || document.querySelector('#view-don-hang table');
+    if (table) {
+        applyDonHangColumnOrder(table);
+        initDonHangColumnsModal();
+        applyDonHangColumnState();
+        updateDonHangSortButtonUI();
+        initResizableTable(table, 'don_hang_col_widths');
+        initSortableDonHangColumns(table);
+    }
 
     const triggerFetch = debounce(() => fetchDonHang(1), 500);
 
-    document.getElementById('don-hang-search').addEventListener('input', e => {
-        viewStates['view-don-hang'].searchTerm = e.target.value; triggerFetch();
-    });
-    document.getElementById('don-hang-filter-from-date').addEventListener('change', e => {
-        viewStates['view-don-hang'].filters.from_date = e.target.value; fetchDonHang(1);
-    });
-    document.getElementById('don-hang-filter-to-date').addEventListener('change', e => {
-        viewStates['view-don-hang'].filters.to_date = e.target.value; fetchDonHang(1);
-    });
-
-    viewContainer.addEventListener('click', e => {
-        const btn = e.target.closest('.filter-btn');
-        if (btn) openDonHangFilterPopover(btn, 'view-don-hang');
-    });
-
-    document.getElementById('don-hang-reset-filters').addEventListener('click', () => {
-        const state = viewStates['view-don-hang'];
-        document.getElementById('don-hang-search').value = '';
-        document.getElementById('don-hang-filter-from-date').value = '';
-        document.getElementById('don-hang-filter-to-date').value = '';
-        state.searchTerm = '';
-        state.filters = { from_date: '', to_date: '', loai: [], trang_thai_xu_ly: [], ma_kho: [], ma_nx: [], yeu_cau: [], nganh: [] };
-        viewContainer.querySelectorAll('#view-don-hang .filter-btn').forEach(btn => {
-            btn.textContent = filterButtonDefaultTexts[btn.id];
+    const searchInput = document.getElementById('don-hang-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', e => {
+            viewStates['view-don-hang'].searchTerm = e.target.value;
+            updateFilterButtonTexts('don-hang');
+            triggerFetch();
         });
-        fetchDonHang(1);
-    });
+    }
+
+    const fromDateInput = document.getElementById('don-hang-filter-from-date');
+    if (fromDateInput) {
+        fromDateInput.addEventListener('change', e => {
+            viewStates['view-don-hang'].filters.from_date = e.target.value;
+            updateFilterButtonTexts('don-hang');
+            fetchDonHang(1);
+        });
+    }
+
+    const toDateInput = document.getElementById('don-hang-filter-to-date');
+    if (toDateInput) {
+        toDateInput.addEventListener('change', e => {
+            viewStates['view-don-hang'].filters.to_date = e.target.value;
+            updateFilterButtonTexts('don-hang');
+            fetchDonHang(1);
+        });
+    }
+
+    if (viewContainer) {
+        viewContainer.addEventListener('click', e => {
+            const filterBtn = e.target.closest('.filter-btn');
+            if (filterBtn) {
+                e.stopPropagation();
+                openTonKhoFilterPopover(filterBtn, 'view-don-hang');
+                return;
+            }
+
+            const sortBtn = e.target.closest('.sort-btn');
+            if (sortBtn) {
+                e.stopPropagation();
+                const sortKey = sortBtn.dataset.sortKey;
+                if (!sortKey) return;
+
+                const state = viewStates['view-don-hang'];
+                if (state.sortBy === sortKey) {
+                    if (state.sortAsc === true) {
+                        state.sortAsc = false;
+                    } else {
+                        state.sortBy = 'thoi_gian';
+                        state.sortAsc = false;
+                    }
+                } else {
+                    state.sortBy = sortKey;
+                    state.sortAsc = true;
+                }
+                updateDonHangSortButtonUI();
+                fetchDonHang(1);
+                return;
+            }
+        });
+    }
+
+    const resetFiltersBtn = document.getElementById('don-hang-reset-filters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            const state = viewStates['view-don-hang'];
+            if (searchInput) searchInput.value = '';
+            if (fromDateInput) fromDateInput.value = '';
+            if (toDateInput) toDateInput.value = '';
+            state.searchTerm = '';
+            state.filters = {
+                from_date: '',
+                to_date: '',
+                loai: [],
+                trang_thai_xu_ly: [],
+                ma_kho: [],
+                thoi_gian: [],
+                ma_nx: [],
+                yeu_cau: [],
+                nganh: [],
+                muc_dich: [],
+                ghi_chu: []
+            };
+            state.sortBy = 'thoi_gian';
+            state.sortAsc = false;
+            updateDonHangSortButtonUI();
+            updateFilterButtonTexts('don-hang');
+            fetchDonHang(1);
+        });
+    }
 
     document.getElementById('don-hang-table-body').addEventListener('click', async e => {
         const row = e.target.closest('tr'); if (!row || !row.dataset.id) return;
@@ -3186,7 +3697,7 @@ export function initDonHangView() {
                 } else if (item.yc_sl && value > item.yc_sl) {
                     showToast('Số lượng (SL) không được lớn hơn Yêu cầu (Y/c).', 'error');
                     item.sl = oldValue || item.yc_sl;
-                } else if (loaiDon === 'Xuat' && currentTotalInUI > stockBeforeThisOrder) {
+                } else if (loaiDon === 'Xuat' && !item.isNewLot && currentTotalInUI > stockBeforeThisOrder) {
                     showToast(`Tổng số lượng xuất (${currentTotalInUI}) vượt quá tồn kho (${stockBeforeThisOrder}).`, 'error');
                     item.sl = oldValue !== undefined ? oldValue : 0;
                 }
@@ -3427,14 +3938,13 @@ function enterInlineEditMode(cell) {
         <div class="flex flex-col gap-2 p-1 min-w-[200px]">
             ${inputHtml}
             <div class="flex justify-end gap-2">
-                <button class="save-inline-btn bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 shadow-md flex items-center gap-1 font-bold text-xs" title="Lưu và Khóa">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    XÁC NHẬN
+                <button class="cancel-inline-btn bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm hover:shadow flex items-center gap-1 transition-all active:scale-[0.98]" title="Hủy">
+                    <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <span>Hủy</span>
                 </button>
-                <button class="cancel-inline-btn bg-gray-500 text-white px-3 py-1.5 rounded hover:bg-gray-600 shadow-md font-bold text-xs" title="Hủy">
-                    HỦY
+                <button class="save-inline-btn bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm hover:shadow flex items-center gap-1 transition-all active:scale-[0.98]" title="Lưu và Khóa">
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    <span>Xác nhận</span>
                 </button>
             </div>
         </div>
@@ -3674,11 +4184,462 @@ setTimeout(attachDonHangTableListeners, 500);
 
 window.toggleNote = function (btn) {
     const container = btn.closest('.note-container');
+    const tr = btn.closest('tr');
+    if (!container) return;
     const isExpanded = container.classList.toggle('expanded');
+    if (tr) {
+        tr.classList.toggle('row-expanded', isExpanded);
+    }
     btn.textContent = isExpanded ? 'Ẩn bớt' : 'Xem thêm';
 
-    // Nếu thu gọn lại, cuộn dòng đó lên đầu tầm mắt nếu cần (optional)
-    if (!isExpanded) {
-        container.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Nếu thu gọn lại, cuộn dòng đó lên đầu tầm mắt nếu cần
+    if (!isExpanded && tr) {
+        tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 };
+
+let allStockForQuickSearch = null;
+let isFetchingQuickStock = false;
+
+export async function fetchAllStockForQuickSearch(forceRefresh = false) {
+    if (allStockForQuickSearch && !forceRefresh) return allStockForQuickSearch;
+    if (isFetchingQuickStock) return allStockForQuickSearch || [];
+    isFetchingQuickStock = true;
+    try {
+        const { data, error } = await sb.from('ton_kho_update')
+            .select('ma_vach, ma_vt, ten_vt, lot, date, ton_cuoi, nganh, phu_trach, tray, tinh_trang, nhap, xuat')
+            .order('ton_cuoi', { ascending: false })
+            .limit(3000);
+        if (!error && data) {
+            allStockForQuickSearch = data;
+        }
+    } catch (err) {
+        console.error("Lỗi tải tồn kho cho tìm kiếm nhanh:", err);
+    } finally {
+        isFetchingQuickStock = false;
+    }
+    return allStockForQuickSearch || [];
+}
+
+export function initDonHangQuickStockSearch() {
+    const searchInput = document.getElementById('don-hang-quick-search-stock');
+    const clearBtn = document.getElementById('don-hang-quick-search-clear');
+    const dropdown = document.getElementById('don-hang-quick-search-dropdown');
+    const resultsContainer = document.getElementById('don-hang-quick-search-results');
+    const countEl = document.getElementById('don-hang-quick-search-count');
+
+    if (!searchInput || !dropdown || !resultsContainer) return;
+
+    if (searchInput.dataset.initialized) return;
+    searchInput.dataset.initialized = 'true';
+
+    const closeDropdown = () => {
+        dropdown.classList.add('hidden');
+    };
+
+    const openDropdown = () => {
+        dropdown.classList.remove('hidden');
+    };
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.classList.add('hidden');
+            closeDropdown();
+            searchInput.focus();
+        });
+    }
+
+    const clearAndCloseQuickSearch = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
+        searchInput.value = '';
+        if (clearBtn) clearBtn.classList.add('hidden');
+        closeDropdown();
+    };
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            clearAndCloseQuickSearch(e);
+        }
+    });
+
+    // Capture phase on document to intercept Escape before global modal handler
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const isDropdownOpen = !dropdown.classList.contains('hidden');
+            const hasInputValue = searchInput.value.trim().length > 0;
+            const isFocused = document.activeElement === searchInput;
+
+            if (isDropdownOpen || hasInputValue || isFocused) {
+                clearAndCloseQuickSearch(e);
+            }
+        }
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+            closeDropdown();
+        }
+    });
+
+    const renderSearchResults = (groupedList, currentOrderNganh, totalLotCount) => {
+        if (!groupedList || groupedList.length === 0) {
+            countEl.innerHTML = `<span class="text-red-500 font-bold">Không tìm thấy vật tư phù hợp</span>`;
+            resultsContainer.innerHTML = `
+                <div class="p-6 text-center text-slate-400">
+                    <p class="mb-1 font-medium text-slate-600">Không tìm thấy sản phẩm tồn kho nào khớp với từ khóa.</p>
+                    <p class="text-[11px] text-slate-400">Thử tìm theo Mã VT, Tên viết tắt không dấu, số LOT hoặc Ngành.</p>
+                </div>
+            `;
+            openDropdown();
+            return;
+        }
+
+        countEl.innerHTML = `
+            <span class="text-slate-700">
+                Tìm thấy <strong class="text-blue-600 font-bold">${groupedList.length}</strong> loại vật tư 
+                <span class="text-slate-400 font-normal">(${totalLotCount} LOT)</span>
+                ${currentOrderNganh ? `<span class="ml-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">⭐ Ưu tiên: <strong>${currentOrderNganh}</strong></span>` : ''}
+            </span>
+        `;
+        
+        let html = '';
+        let globalLotIndex = 0;
+        const allLotsFlattened = [];
+
+        const getTinhTrangTextColor = (tinhTrang) => {
+            if (!tinhTrang) return 'text-slate-400';
+            const tt = tinhTrang.trim();
+            if (tt === 'Hết hạn sử dụng' || tt.toLowerCase().includes('hết hạn')) {
+                return 'text-red-600 font-bold';
+            }
+            if (tt.includes('1-30')) {
+                return 'text-rose-600 font-bold';
+            }
+            if (tt.includes('31-60')) {
+                return 'text-orange-600 font-bold';
+            }
+            if (tt.includes('61-90')) {
+                return 'text-amber-600 font-semibold';
+            }
+            if (tt.includes('91-120')) {
+                return 'text-amber-500 font-semibold';
+            }
+            if (tt.includes('121-150')) {
+                return 'text-yellow-600 font-semibold';
+            }
+            if (tt.includes('151-180')) {
+                return 'text-yellow-500 font-semibold';
+            }
+            if (tt.includes('Trên 180') || tt.includes('Còn sử dụng')) {
+                return 'text-emerald-600 font-semibold';
+            }
+            if (tt.includes('Cận date')) {
+                return 'text-rose-500 font-bold';
+            }
+            if (tt === 'Không có date' || tt.toLowerCase().includes('không')) {
+                return 'text-slate-400 font-normal';
+            }
+            return 'text-slate-600 font-medium';
+        };
+
+        groupedList.slice(0, 40).forEach((group, grpIdx) => {
+            const isSameNganh = currentOrderNganh && group.nganh && group.nganh.toLowerCase() === currentOrderNganh.toLowerCase();
+            const groupTon = group.tong_ton || 0;
+            const groupHasStock = groupTon > 0;
+
+            html += `
+                <div class="product-group-section border-b border-slate-200 last:border-b-0">
+                    <!-- Tiêu đề Sản phẩm (Mã VT / Tên VT bên trái mở rộng tối đa, Ngành + Tồn bên phải) -->
+                    <div class="px-3.5 py-2 ${isSameNganh ? 'bg-amber-50/70 border-l-4 border-l-amber-500' : 'bg-slate-50/80 border-l-4 border-l-blue-500'} border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 flex-grow min-w-0">
+                            <span class="font-mono font-bold ${isSameNganh ? 'text-amber-800' : 'text-blue-700'} text-xs md:text-sm flex-shrink-0">${group.ma_vt || 'N/A'}</span>
+                            <span class="text-slate-300 font-light flex-shrink-0">|</span>
+                            <span class="font-bold text-slate-800 text-xs md:text-sm truncate" title="${group.ten_vt || ''}">${group.ten_vt || 'Chưa có tên'}</span>
+                        </div>
+                        <div class="flex items-center gap-2.5 flex-shrink-0">
+                            ${group.nganh ? `<span class="text-[11px] font-semibold ${isSameNganh ? 'text-amber-700 bg-amber-100/80 border border-amber-200 px-1.5 py-0.5 rounded' : 'text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded'}">🏷️ ${group.nganh}</span>` : ''}
+                            <span class="text-xs font-semibold text-slate-600">
+                                Tổng tồn: <strong class="${groupHasStock ? 'text-emerald-600' : 'text-rose-600'} font-bold">${groupTon.toLocaleString()}</strong>
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-normal">(${group.lots.length} LOT)</span>
+                        </div>
+                    </div>
+
+                    <!-- Header các cột thông tin LOT (thụt lề sang phải) -->
+                    <div class="pl-7 pr-3 py-1.5 bg-slate-100/90 border-b border-slate-300 text-[11px] font-bold text-slate-900 flex items-center select-none">
+                        <span class="w-5 pl-1 flex-shrink-0 text-center text-slate-500 font-bold">#</span>
+                        <span class="w-32 flex-shrink-0 text-left pl-1">LOT</span>
+                        <span class="w-20 flex-shrink-0 text-center">Date</span>
+                        <span class="w-44 flex-shrink-0 text-center">Tình trạng</span>
+                        <span class="w-36 flex-shrink-0 text-left pl-2">Phụ trách</span>
+                        <span class="w-16 flex-shrink-0 text-center">Tray</span>
+                        <span class="w-16 flex-shrink-0 text-right pr-2">Tồn</span>
+                        <span class="w-10 flex-shrink-0 text-center pr-2 ml-auto">Thêm</span>
+                    </div>
+
+                    <!-- Danh sách các LOT theo dạng cột thẳng hàng không khung màu (thụt lề sang phải) -->
+                    <div class="bg-white divide-y divide-slate-100 py-0.5">
+            `;
+
+            group.lots.forEach((stock, lotIdx) => {
+                const isLast = lotIdx === group.lots.length - 1;
+                const branchSymbol = isLast ? '└──' : '├──';
+                const hasStock = (stock.ton_cuoi || 0) > 0;
+                
+                const lotId = globalLotIndex++;
+                allLotsFlattened.push(stock);
+
+                html += `
+                    <div class="pl-7 pr-3 py-1.5 hover:bg-blue-50/70 transition-colors flex items-center group cursor-pointer quick-stock-lot-row border-b border-slate-50 last:border-b-0" data-lot-id="${lotId}">
+                        <!-- 1. Nhánh -->
+                        <span class="w-5 font-mono text-slate-400 font-bold text-xs select-none pl-1 flex-shrink-0 text-center">${branchSymbol}</span>
+                        
+                        <!-- 2. LOT -->
+                        <div class="w-32 flex-shrink-0 pl-1 truncate" title="${stock.lot || ''}">
+                            <span class="font-mono font-bold text-slate-800 text-xs">${stock.lot || '-'}</span>
+                        </div>
+
+                        <!-- 3. Date -->
+                        <div class="w-20 flex-shrink-0 text-center truncate">
+                            <span class="font-mono text-slate-600 text-xs">${stock.date || '-'}</span>
+                        </div>
+
+                        <!-- 4. Tình trạng -->
+                        <div class="w-44 flex-shrink-0 text-center truncate" title="${stock.tinh_trang || ''}">
+                            <span class="text-xs ${getTinhTrangTextColor(stock.tinh_trang)}">${stock.tinh_trang || '-'}</span>
+                        </div>
+
+                        <!-- 5. Phụ trách -->
+                        <div class="w-36 flex-shrink-0 pl-2 truncate" title="${stock.phu_trach || ''}">
+                            <span class="text-xs text-slate-600">${stock.phu_trach || '-'}</span>
+                        </div>
+
+                        <!-- 6. Tray -->
+                        <div class="w-16 flex-shrink-0 text-center truncate" title="${stock.tray || ''}">
+                            <span class="text-xs font-semibold ${stock.tray ? 'text-indigo-600' : 'text-slate-400'}">${stock.tray || '-'}</span>
+                        </div>
+
+                        <!-- 7. Số tồn -->
+                        <div class="w-16 flex-shrink-0 text-right pr-2">
+                            <span class="text-xs font-bold ${hasStock ? 'text-emerald-600' : 'text-rose-500'}">
+                                ${(stock.ton_cuoi || 0).toLocaleString()}
+                            </span>
+                        </div>
+
+                        <!-- 8. Thêm (+) sát bên phải -->
+                        <div class="w-10 flex-shrink-0 text-center pr-2 ml-auto">
+                            <button type="button" title="Thêm vào đơn hàng" class="quick-add-lot-btn w-6 h-6 bg-blue-600 hover:bg-blue-700 active:scale-90 text-white rounded-md shadow-xs transition-all flex items-center justify-center mx-auto">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        resultsContainer.innerHTML = html;
+        openDropdown();
+
+        // Gán sự kiện click thêm cho từng LOT
+        resultsContainer.querySelectorAll('.quick-stock-lot-row').forEach((rowEl) => {
+            const lotId = parseInt(rowEl.dataset.lotId, 10);
+            const stock = allLotsFlattened[lotId];
+            if (!stock) return;
+
+            const addBtn = rowEl.querySelector('.quick-add-lot-btn');
+
+            const handleAdd = async (e) => {
+                e.stopPropagation();
+                
+                const loaiDon = document.getElementById('don-hang-modal-loai-don')?.value || '';
+                const requestedQty = 1;
+                const availableStock = stock.ton_cuoi || 0;
+                let actualSl = 0;
+                if (loaiDon === 'Nhap') {
+                    actualSl = requestedQty;
+                } else if (loaiDon === 'Xuat') {
+                    actualSl = Math.min(availableStock, requestedQty);
+                }
+
+                const isTbChecked = document.getElementById('don-hang-chi-tiet-tb-checkbox')?.checked;
+                const isThChecked = document.getElementById('don-hang-chi-tiet-th-checkbox')?.checked;
+
+                const newItem = {
+                    id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 7)}`,
+                    ma_vt: stock.ma_vt,
+                    ten_vt: stock.ten_vt,
+                    lot: stock.lot || '',
+                    date: stock.date || '',
+                    ma_vach: stock.ma_vach || '',
+                    tray: stock.tray || '',
+                    nganh: stock.nganh || '',
+                    phu_trach: stock.phu_trach || '',
+                    yc_sl: requestedQty,
+                    sl: actualSl,
+                    tb: (loaiDon === 'Xuat' && isTbChecked) ? actualSl : 0,
+                    th: (loaiDon === 'Xuat' && isThChecked) ? actualSl : 0,
+                    pendingData: { nhap: 0, xuat: 0 },
+                    tonKhoData: stock,
+                    lotOptions: [stock],
+                    ma_vach_valid: true
+                };
+
+                // Nếu có dòng rỗng chưa nhập gì ở bảng chi tiết thì thay thế, nếu không thì push vào
+                const emptyRowIndex = chiTietItems.findIndex(item => item && !item.ma_vt && (!item.lot || item.lot === '') && (!item.yc_sl || item.yc_sl === 1) && (!item.sl || item.sl === 0));
+                if (emptyRowIndex !== -1) {
+                    chiTietItems[emptyRowIndex] = newItem;
+                } else {
+                    chiTietItems.push(newItem);
+                }
+
+                renderChiTietTable();
+                
+                // Fetch full LOT options cho mã VT này
+                try {
+                    const ma_kho_orig = document.getElementById('don-hang-edit-mode-ma-kho')?.value || '';
+                    const { data: lotData } = await sb.from('ton_kho_update')
+                        .select('ma_vach, lot, date, ten_vt, tinh_trang, ton_cuoi, nganh, phu_trach, tray, nhap, xuat')
+                        .eq('ma_vt', stock.ma_vt);
+                    if (lotData && lotData.length > 0) {
+                        const allMaVachs = lotData.map(l => l.ma_vach);
+                        const pendingAmounts = await getPendingAmountsByMaVach(allMaVachs, ma_kho_orig);
+                        newItem.lotOptions = lotData.map(l => ({
+                            ...l,
+                            pendingData: pendingAmounts.get(l.ma_vach) || { nhap: 0, xuat: 0 }
+                        }));
+                        const found = newItem.lotOptions.find(opt => opt.ma_vach === newItem.ma_vach);
+                        if (found) {
+                            newItem.tonKhoData = found;
+                            newItem.pendingData = found.pendingData;
+                        }
+                        renderChiTietTable();
+                    }
+                } catch (err) {}
+
+                // Hiệu ứng nút đã thêm
+                if (addBtn) {
+                    addBtn.className = 'w-6 h-6 bg-emerald-600 text-white rounded-md shadow-xs transition-all flex items-center justify-center pointer-events-none';
+                    addBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>`;
+                    setTimeout(() => {
+                        addBtn.className = 'quick-add-lot-btn w-6 h-6 bg-blue-600 hover:bg-blue-700 active:scale-90 text-white rounded-md shadow-xs transition-all flex items-center justify-center';
+                        addBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>`;
+                    }, 1500);
+                }
+
+                showToast(`Đã thêm ${stock.ma_vt} (${stock.lot || 'No LOT'}) vào đơn hàng`, 'success');
+                searchInput.focus();
+            };
+
+            rowEl.addEventListener('click', handleAdd);
+        });
+    };
+
+    const handleSearch = async () => {
+        const query = searchInput.value.trim();
+        if (!query) {
+            if (clearBtn) clearBtn.classList.add('hidden');
+            closeDropdown();
+            return;
+        }
+
+        if (clearBtn) clearBtn.classList.remove('hidden');
+        resultsContainer.innerHTML = `<div class="p-6 text-center text-slate-400">Đang tìm kiếm tồn kho...</div>`;
+        openDropdown();
+
+        const currentNganh = document.getElementById('don-hang-modal-nganh')?.value?.trim() || '';
+
+        // Tải hoặc lấy từ cache
+        const allStock = await fetchAllStockForQuickSearch();
+        const tokens = removeVietnameseTones(query.toLowerCase()).split(/\s+/).filter(Boolean);
+
+        const filtered = allStock.filter(item => {
+            const searchable = removeVietnameseTones(`${item.ma_vt || ''} ${item.ten_vt || ''} ${item.lot || ''} ${item.date || ''} ${item.nganh || ''} ${item.tray || ''} ${item.tinh_trang || ''} ${item.phu_trach || ''} ${item.ma_vach || ''}`.toLowerCase());
+            return tokens.every(token => searchable.includes(token));
+        });
+
+        // Gom nhóm theo Mã VT để hiển thị dạng cây (Tree)
+        const groupMap = new Map();
+        filtered.forEach(item => {
+            const key = (item.ma_vt || 'KHONG_MA').toUpperCase();
+            if (!groupMap.has(key)) {
+                groupMap.set(key, {
+                    ma_vt: item.ma_vt,
+                    ten_vt: item.ten_vt,
+                    nganh: item.nganh,
+                    phu_trach: item.phu_trach,
+                    tong_ton: 0,
+                    lots: []
+                });
+            }
+            const grp = groupMap.get(key);
+            grp.lots.push(item);
+            grp.tong_ton += (Number(item.ton_cuoi) || 0);
+        });
+
+        const groupedList = Array.from(groupMap.values());
+
+        // Sắp xếp các nhóm: ƯU TIÊN NGÀNH CỦA ĐƠN HÀNG LÊN TRƯỚC
+        const qUpper = query.toUpperCase();
+        groupedList.sort((a, b) => {
+            const aIsSameNganh = currentNganh && a.nganh && a.nganh.toLowerCase() === currentNganh.toLowerCase() ? 1 : 0;
+            const bIsSameNganh = currentNganh && b.nganh && b.nganh.toLowerCase() === currentNganh.toLowerCase() ? 1 : 0;
+            
+            const aHasStock = a.tong_ton > 0 ? 1 : 0;
+            const bHasStock = b.tong_ton > 0 ? 1 : 0;
+
+            // 1. Trùng ngành và có tồn kho lên đầu tiên
+            const aRank = (aIsSameNganh * 2) + aHasStock;
+            const bRank = (bIsSameNganh * 2) + bHasStock;
+            if (bRank !== aRank) return bRank - aRank;
+
+            // 2. Khớp chính xác mã VT
+            const aExact = (a.ma_vt || '').toUpperCase() === qUpper ? 1 : 0;
+            const bExact = (b.ma_vt || '').toUpperCase() === qUpper ? 1 : 0;
+            if (bExact !== aExact) return bExact - aExact;
+
+            // 3. Bắt đầu bằng mã VT
+            const aStarts = (a.ma_vt || '').toUpperCase().startsWith(qUpper) ? 1 : 0;
+            const bStarts = (b.ma_vt || '').toUpperCase().startsWith(qUpper) ? 1 : 0;
+            if (bStarts !== aStarts) return bStarts - aStarts;
+
+            // 4. Tổng tồn cao hơn
+            if (b.tong_ton !== a.tong_ton) return b.tong_ton - a.tong_ton;
+
+            // 5. Thứ tự mã VT
+            return (a.ma_vt || '').localeCompare(b.ma_vt || '');
+        });
+
+        // Sắp xếp các LOT trong từng nhóm: LOT còn tồn trước, sau đó theo date/lot
+        groupedList.forEach(grp => {
+            grp.lots.sort((la, lb) => {
+                const laHas = (la.ton_cuoi || 0) > 0 ? 1 : 0;
+                const lbHas = (lb.ton_cuoi || 0) > 0 ? 1 : 0;
+                if (lbHas !== laHas) return lbHas - laHas;
+                return (lb.ton_cuoi || 0) - (la.ton_cuoi || 0);
+            });
+        });
+
+        renderSearchResults(groupedList, currentNganh, filtered.length);
+    };
+
+    searchInput.addEventListener('input', debounce(handleSearch, 200));
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim()) {
+            handleSearch();
+        } else {
+            fetchAllStockForQuickSearch(); // Preload data
+        }
+    });
+}
+
+setTimeout(initDonHangQuickStockSearch, 600);

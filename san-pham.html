@@ -1,44 +1,119 @@
 <div class="flex-shrink-0">
-    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Quản Lý Sản Phẩm</h1>
     <div class="bg-white p-4 rounded-lg shadow-md mb-4">
         <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
             <div class="flex flex-wrap gap-2 items-center">
-                <input type="text" id="san-pham-search" placeholder="Tìm kiếm chung..." class="px-3 py-2 border rounded-md w-48">
                 <div class="relative">
-                    <button id="san-pham-filter-ma-vt-btn" data-filter-key="ma_vt" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Mã VT</button>
-                </div>
-                <div class="relative">
-                    <button id="san-pham-filter-ten-vt-btn" data-filter-key="ten_vt" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Tên Vật Tư</button>
-                </div>
-                <div class="relative">
-                    <button id="san-pham-filter-nganh-btn" data-filter-key="nganh" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Ngành</button>
-                </div>
-                <div class="relative">
-                    <button id="san-pham-filter-phu-trach-btn" data-filter-key="phu_trach" class="filter-btn text-left px-3 py-2 border rounded-md bg-white w-36">Phụ Trách</button>
+                    <input type="text" id="san-pham-search" placeholder="Tìm kiếm chung..." class="pl-8 pr-3 py-2 border rounded-md w-56 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
-                <button id="san-pham-reset-filters" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md">Xóa Lọc</button>
-                <button id="san-pham-btn-add" class="sp-admin-only bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">+ Thêm</button>
-                <button id="san-pham-btn-edit" class="sp-admin-only bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md" disabled>Sửa</button>
-                <button id="san-pham-btn-delete" class="sp-admin-only bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md" disabled>Xóa</button>
-                <button id="san-pham-btn-excel" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Excel</button>
+                <button id="san-pham-reset-filters" class="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all" title="Xóa tất cả bộ lọc">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <span>Xóa Lọc</span>
+                </button>
+                <button id="san-pham-btn-columns" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold py-1.5 px-3 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all" title="Tùy chọn cột hiển thị">
+                    <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+                    <span>Cột Hiển Thị</span>
+                </button>
+                <button id="san-pham-btn-excel" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 font-semibold py-1.5 px-3 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all" title="Xuất file Excel">
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Xuất Excel</span>
+                </button>
+                <button id="san-pham-btn-edit" class="sp-admin-only bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-semibold py-1.5 px-3 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled title="Sửa thông tin sản phẩm">
+                    <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    <span>Sửa</span>
+                </button>
+                <button id="san-pham-btn-delete" class="sp-admin-only bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-semibold py-1.5 px-3 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed" disabled title="Xóa sản phẩm">
+                    <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span>Xóa</span>
+                </button>
+                <button id="san-pham-btn-add" class="sp-admin-only bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1.5 px-3.5 rounded-lg text-sm flex items-center gap-1.5 shadow-sm transition-all" title="Thêm sản phẩm mới">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                    <span>+ Thêm Mới</span>
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="flex-grow bg-white rounded-lg shadow-md overflow-hidden">
+<div class="flex-grow bg-white rounded-lg shadow-md overflow-hidden min-w-0">
     <div class="table-container">
-        <table class="min-w-full border-collapse">
-            <thead class="bg-gray-200"><tr>
-                <th class="px-4 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 5%;"><input type="checkbox" id="san-pham-select-all"></th>
-                <th class="px-4 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 10%;">Ảnh</th>
-                <th class="px-6 py-2 text-left text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 20%;">Mã Vật Tư</th>
-                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 40%;">Tên Vật Tư</th>
-                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 10%;">Ngành</th>
-                <th class="px-6 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300" style="width: 20%;">Phụ Trách</th>
-            </tr></thead>
+        <table id="san-pham-table" class="resizable-table min-w-full border-collapse">
+            <thead class="bg-gray-200">
+                <tr>
+                    <th class="no-drag no-resize px-1 py-3 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 42px; min-width: 42px; max-width: 42px;" data-col="select">
+                        <div class="th-content flex items-center justify-center w-full">
+                            <input type="checkbox" id="san-pham-select-all" class="cursor-pointer">
+                        </div>
+                    </th>
+                    <th class="no-drag no-resize px-2 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 60px; min-width: 60px;" data-col="url_hinh_anh">
+                        <div class="th-content flex items-center justify-center w-full text-center">
+                            <span>Ảnh</span>
+                        </div>
+                    </th>
+                    <th class="px-2 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 22%;" data-col="ma_vt">
+                        <div class="th-content flex items-center justify-center gap-1 w-full text-center">
+                            <span class="truncate">Mã Vật Tư</span>
+                            <button class="sort-btn p-0.5 rounded hover:bg-gray-300 text-gray-400 transition-colors flex items-center justify-center flex-shrink-0" data-sort-key="ma_vt" title="Sắp xếp A-Z / Z-A">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path class="sort-icon-up" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 9l7-7 7 7"/>
+                                    <path class="sort-icon-down" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7 7 7-7"/>
+                                </svg>
+                            </button>
+                            <button id="san-pham-filter-ma-vt-btn" data-filter-key="ma_vt" class="filter-btn p-1 rounded hover:bg-gray-300 text-gray-500 transition-colors flex items-center justify-center relative flex-shrink-0" title="Lọc Mã VT">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                <span class="filter-badge hidden absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center leading-none shadow-sm"></span>
+                            </button>
+                        </div>
+                    </th>
+                    <th class="px-2 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 38%;" data-col="ten_vt">
+                        <div class="th-content flex items-center justify-center gap-1 w-full text-center">
+                            <span class="truncate">Tên Vật Tư</span>
+                            <button class="sort-btn p-0.5 rounded hover:bg-gray-300 text-gray-400 transition-colors flex items-center justify-center flex-shrink-0" data-sort-key="ten_vt" title="Sắp xếp A-Z / Z-A">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path class="sort-icon-up" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 9l7-7 7 7"/>
+                                    <path class="sort-icon-down" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7 7 7-7"/>
+                                </svg>
+                            </button>
+                            <button id="san-pham-filter-ten-vt-btn" data-filter-key="ten_vt" class="filter-btn p-1 rounded hover:bg-gray-300 text-gray-500 transition-colors flex items-center justify-center relative flex-shrink-0" title="Lọc Tên Vật Tư">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                <span class="filter-badge hidden absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center leading-none shadow-sm"></span>
+                            </button>
+                        </div>
+                    </th>
+                    <th class="px-2 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 15%;" data-col="nganh">
+                        <div class="th-content flex items-center justify-center gap-1 w-full text-center">
+                            <span class="truncate">Ngành</span>
+                            <button class="sort-btn p-0.5 rounded hover:bg-gray-300 text-gray-400 transition-colors flex items-center justify-center flex-shrink-0" data-sort-key="nganh" title="Sắp xếp A-Z / Z-A">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path class="sort-icon-up" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 9l7-7 7 7"/>
+                                    <path class="sort-icon-down" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7 7 7-7"/>
+                                </svg>
+                            </button>
+                            <button id="san-pham-filter-nganh-btn" data-filter-key="nganh" class="filter-btn p-1 rounded hover:bg-gray-300 text-gray-500 transition-colors flex items-center justify-center relative flex-shrink-0" title="Lọc Ngành">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                <span class="filter-badge hidden absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center leading-none shadow-sm"></span>
+                            </button>
+                        </div>
+                    </th>
+                    <th class="px-2 py-2 text-center text-xs font-bold text-black uppercase tracking-wider border border-gray-300 select-none" style="width: 25%;" data-col="phu_trach">
+                        <div class="th-content flex items-center justify-center gap-1 w-full text-center">
+                            <span class="truncate">Phụ Trách</span>
+                            <button class="sort-btn p-0.5 rounded hover:bg-gray-300 text-gray-400 transition-colors flex items-center justify-center flex-shrink-0" data-sort-key="phu_trach" title="Sắp xếp A-Z / Z-A">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path class="sort-icon-up" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 9l7-7 7 7"/>
+                                    <path class="sort-icon-down" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7 7 7-7"/>
+                                </svg>
+                            </button>
+                            <button id="san-pham-filter-phu-trach-btn" data-filter-key="phu_trach" class="filter-btn p-1 rounded hover:bg-gray-300 text-gray-500 transition-colors flex items-center justify-center relative flex-shrink-0" title="Lọc Phụ Trách">
+                                <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                <span class="filter-badge hidden absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center leading-none shadow-sm"></span>
+                            </button>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
             <tbody id="san-pham-table-body" class="bg-white"></tbody>
         </table>
     </div>

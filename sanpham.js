@@ -1,13 +1,257 @@
-import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, PLACEHOLDER_IMAGE_URL, currentUser, showView, openAutocomplete } from './app.js';
+import { sb, cache, viewStates, showLoading, showToast, showConfirm, debounce, renderPagination, sanitizeFileName, filterButtonDefaultTexts, PLACEHOLDER_IMAGE_URL, currentUser, showView, openAutocomplete, initResizableTable, openTonKhoFilterPopover, updateFilterButtonTexts } from './app.js';
 
 let selectedSanPhamImageFile = null;
+
+// Danh sách cột Sản Phẩm (Tồn được nhúng trực tiếp trong cột Mã VT)
+export const SAN_PHAM_COLUMNS = [
+    { key: 'select', label: 'Chọn', default: true, locked: true },
+    { key: 'url_hinh_anh', label: 'Ảnh', default: true },
+    { key: 'ma_vt', label: 'Mã VT (kèm Tồn)', default: true },
+    { key: 'ten_vt', label: 'Tên Vật Tư', default: true },
+    { key: 'nganh', label: 'Ngành', default: true },
+    { key: 'phu_trach', label: 'Phụ Trách', default: true },
+];
+
+export function getSanPhamColumnOrder() {
+    const userKey = currentUser?.gmail || currentUser?.ho_ten || 'default';
+    try {
+        const stored = localStorage.getItem('sanPhamColOrder_' + userKey);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (e) {
+        console.error("Error reading sanPham col order:", e);
+    }
+    return null;
+}
+
+export function saveSanPhamColumnOrder(colOrder) {
+    const userKey = currentUser?.gmail || currentUser?.ho_ten || 'default';
+    try {
+        localStorage.setItem('sanPhamColOrder_' + userKey, JSON.stringify(colOrder));
+    } catch (e) {
+        console.error("Error saving sanPham col order:", e);
+    }
+}
+
+export function reorderSanPhamTableBodyCells(table, colOrder) {
+    if (!table || !colOrder || colOrder.length === 0) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const cellsMap = {};
+        tr.querySelectorAll('td').forEach(td => {
+            if (td.dataset.col) {
+                cellsMap[td.dataset.col] = td;
+            }
+        });
+
+        // Always keep select first
+        if (cellsMap['select']) {
+            tr.appendChild(cellsMap['select']);
+        }
+
+        colOrder.forEach(colKey => {
+            if (colKey !== 'select' && cellsMap[colKey]) {
+                tr.appendChild(cellsMap[colKey]);
+            }
+        });
+    });
+}
+
+export function applySanPhamColumnOrder(table) {
+    if (!table) table = document.getElementById('san-pham-table') || document.querySelector('#view-san-pham table');
+    if (!table) return;
+
+    const colOrder = getSanPhamColumnOrder();
+    if (!colOrder) return;
+
+    const theadTr = table.querySelector('thead tr');
+    if (theadTr) {
+        const thsMap = {};
+        theadTr.querySelectorAll('th').forEach(th => {
+            if (th.dataset.col) thsMap[th.dataset.col] = th;
+        });
+
+        // Always keep select column first
+        if (thsMap['select']) {
+            theadTr.appendChild(thsMap['select']);
+        }
+
+        colOrder.forEach(colKey => {
+            if (colKey !== 'select' && thsMap[colKey]) {
+                theadTr.appendChild(thsMap[colKey]);
+            }
+        });
+    }
+
+    reorderSanPhamTableBodyCells(table, colOrder);
+}
+
+export function initSortableSanPhamColumns(table) {
+    if (!table || typeof Sortable === 'undefined') return;
+    const theadTr = table.querySelector('thead tr');
+    if (!theadTr) return;
+
+    if (theadTr._sortableInstance) {
+        theadTr._sortableInstance.destroy();
+    }
+
+    theadTr._sortableInstance = Sortable.create(theadTr, {
+        animation: 200,
+        draggable: 'th:not(.no-drag):not([data-col="select"])',
+        filter: '.col-resizer, .filter-btn, .sort-btn, input, .no-drag, [data-col="select"]',
+        preventOnFilter: false,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        onEnd: function () {
+            const colOrder = Array.from(theadTr.querySelectorAll('th')).map(th => th.dataset.col).filter(Boolean);
+            saveSanPhamColumnOrder(colOrder);
+            reorderSanPhamTableBodyCells(table, colOrder);
+            showToast('Đã lưu thứ tự cột Sản Phẩm', 'success');
+        }
+    });
+}
+
+export function getSanPhamColumnVisibility() {
+    try {
+        const stored = localStorage.getItem('sanPhamColumnVisibility');
+        if (stored) return JSON.parse(stored);
+    } catch (e) {
+        console.error("Error reading sanPhamColumnVisibility:", e);
+    }
+    const defaults = {};
+    SAN_PHAM_COLUMNS.forEach(c => defaults[c.key] = c.default);
+    return defaults;
+}
+
+export function saveSanPhamColumnVisibility(visibility) {
+    try {
+        localStorage.setItem('sanPhamColumnVisibility', JSON.stringify(visibility));
+    } catch (e) {
+        console.error("Error saving sanPhamColumnVisibility:", e);
+    }
+}
+
+export function applySanPhamColumnState() {
+    const table = document.getElementById('san-pham-table') || document.querySelector('#view-san-pham table');
+    if (!table) return;
+
+    const visibility = getSanPhamColumnVisibility();
+
+    SAN_PHAM_COLUMNS.forEach(col => {
+        if (col.locked) return;
+        const isVisible = visibility[col.key] !== false;
+        const thElements = table.querySelectorAll(`th[data-col="${col.key}"]`);
+        const tdElements = table.querySelectorAll(`td[data-col="${col.key}"]`);
+
+        thElements.forEach(el => el.classList.toggle('hidden', !isVisible));
+        tdElements.forEach(el => el.classList.toggle('hidden', !isVisible));
+    });
+}
+
+export function updateSanPhamSortButtonUI() {
+    const state = viewStates['view-san-pham'];
+    if (!state) return;
+    const currentSort = state.sortBy || 'ma_vt';
+    const isAsc = state.sortAsc !== false;
+
+    const table = document.getElementById('san-pham-table') || document.querySelector('#view-san-pham table');
+    if (!table) return;
+
+    table.querySelectorAll('.sort-btn').forEach(btn => {
+        const sortKey = btn.dataset.sortKey;
+        if (sortKey === currentSort) {
+            if (isAsc) {
+                btn.classList.add('sort-asc');
+                btn.classList.remove('sort-desc');
+            } else {
+                btn.classList.add('sort-desc');
+                btn.classList.remove('sort-asc');
+            }
+        } else {
+            btn.classList.remove('sort-asc', 'sort-desc');
+        }
+    });
+}
+
+function initSanPhamColumnsModal() {
+    const modal = document.getElementById('san-pham-columns-modal');
+    const openBtn = document.getElementById('san-pham-btn-columns');
+    const closeBtn = document.getElementById('san-pham-columns-modal-close');
+    const cancelBtn = document.getElementById('san-pham-columns-cancel-btn');
+    const applyBtn = document.getElementById('san-pham-columns-apply-btn');
+    const selectAllBtn = document.getElementById('san-pham-columns-select-all');
+    const resetDefaultBtn = document.getElementById('san-pham-columns-reset-default');
+    const listContainer = document.getElementById('san-pham-columns-checkbox-list');
+
+    if (!modal || !openBtn) return;
+
+    const renderCheckboxes = (visibility) => {
+        if (!listContainer) return;
+        listContainer.innerHTML = SAN_PHAM_COLUMNS.filter(c => !c.locked).map(col => `
+            <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-100 cursor-pointer border border-transparent hover:border-gray-200 transition-all select-none">
+                <input type="checkbox" data-col-key="${col.key}" ${visibility[col.key] !== false ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer">
+                <span class="font-medium text-gray-800">${col.label}</span>
+            </label>
+        `).join('');
+    };
+
+    openBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentVis = getSanPhamColumnVisibility();
+        renderCheckboxes(currentVis);
+        modal.classList.remove('hidden');
+    };
+
+    const closeModal = () => modal.classList.add('hidden');
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+
+    if (selectAllBtn) {
+        selectAllBtn.onclick = (e) => {
+            e.preventDefault();
+            listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+        };
+    }
+
+    if (resetDefaultBtn) {
+        resetDefaultBtn.onclick = (e) => {
+            e.preventDefault();
+            const defaults = {};
+            SAN_PHAM_COLUMNS.forEach(c => defaults[c.key] = c.default);
+            renderCheckboxes(defaults);
+        };
+    }
+
+    if (applyBtn) {
+        applyBtn.onclick = (e) => {
+            e.preventDefault();
+            const newVis = {};
+            listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                newVis[cb.dataset.colKey] = cb.checked;
+            });
+            SAN_PHAM_COLUMNS.filter(c => c.locked).forEach(c => {
+                newVis[c.key] = true;
+            });
+            saveSanPhamColumnVisibility(newVis);
+            applySanPhamColumnState();
+            closeModal();
+            showToast('Đã lưu cấu hình cột hiển thị!', 'success');
+        };
+    }
+}
 
 function buildSanPhamQuery() {
     const state = viewStates['view-san-pham'];
     let query = sb.from('san_pham').select('*', { count: 'exact' });
 
-    if (currentUser.phan_quyen === 'View') {
-        query = query.eq('phu_trach', currentUser.ho_ten);
+    if (currentUser?.phan_quyen === 'View') {
+        query = query.eq('phu_trach', currentUser?.ho_ten || '');
     }
 
     if (state.searchTerm) query = query.or(`ma_vt.ilike.%${state.searchTerm}%,ten_vt.ilike.%${state.searchTerm}%,nganh.ilike.%${state.searchTerm}%,phu_trach.ilike.%${state.searchTerm}%`);
@@ -32,45 +276,66 @@ export async function fetchSanPham(page = viewStates['view-san-pham'].currentPag
         const from = (page - 1) * itemsPerPage;
         const to = from + itemsPerPage - 1;
         
-        let query = buildSanPhamQuery();
+        let sortBy = state.sortBy || 'ma_vt';
+        let sortAsc = state.sortAsc !== false;
+        
+        let query = buildSanPhamQuery().order(sortBy, { ascending: sortAsc, nullsFirst: false }).range(from, to);
 
-        const { data: sanPhamData, error, count } = await query.order('ma_vt', { ascending: true }).range(from, to);
+        const { data: sanPhamData, error, count } = await query;
         
         if (error) {
-            showToast("Không thể tải dữ liệu sản phẩm.", 'error');
+            console.error("fetchSanPham error:", error);
+            showToast("Không thể tải dữ liệu sản phẩm: " + error.message, 'error');
+            renderSanPhamTable([]);
         } else {
-            state.totalFilteredCount = count; 
+            state.totalFilteredCount = count || 0; 
             
-            let dataWithStock = sanPhamData;
+            let dataWithStock = (sanPhamData || []).map(sp => ({
+                ...sp,
+                total_ton_cuoi: 0
+            }));
+
             if (sanPhamData && sanPhamData.length > 0) {
                 const maVts = sanPhamData.map(p => p.ma_vt);
-                const { data: stockData, error: stockError } = await sb
-                    .from('ton_kho_update')
-                    .select('ma_vt, ton_cuoi')
-                    .in('ma_vt', maVts);
-                
-                if (stockError) {
-                    showToast("Lỗi khi tải dữ liệu tồn kho.", 'error');
-                } else {
-                    const stockMap = new Map();
-                    (stockData || []).forEach(item => {
-                        const currentStock = stockMap.get(item.ma_vt) || 0;
-                        stockMap.set(item.ma_vt, currentStock + (item.ton_cuoi || 0));
-                    });
+                try {
+                    const { data: stockData, error: stockError } = await sb
+                        .from('ton_kho_update')
+                        .select('ma_vt, ton_cuoi')
+                        .in('ma_vt', maVts);
+                    
+                    if (stockError) {
+                        console.warn("Lỗi khi tải dữ liệu tồn kho cho sản phẩm:", stockError);
+                    } else if (stockData) {
+                        const stockMap = new Map();
+                        stockData.forEach(item => {
+                            const currentStock = stockMap.get(item.ma_vt) || 0;
+                            stockMap.set(item.ma_vt, currentStock + (item.ton_cuoi || 0));
+                        });
 
-                    dataWithStock = sanPhamData.map(sp => ({
-                        ...sp,
-                        total_ton_cuoi: stockMap.get(sp.ma_vt) || 0
-                    }));
+                        dataWithStock = sanPhamData.map(sp => ({
+                            ...sp,
+                            total_ton_cuoi: stockMap.get(sp.ma_vt) || 0
+                        }));
+                    }
+                } catch (stockEx) {
+                    console.warn("Lỗi ngoại lệ khi tính tồn kho:", stockEx);
                 }
             }
 
             cache.sanPhamList = dataWithStock;
             
             renderSanPhamTable(dataWithStock);
-            renderPagination('san-pham', count, from, to);
+            const table = document.getElementById('san-pham-table');
+            if (table) applySanPhamColumnOrder(table);
+            applySanPhamColumnState();
+            updateSanPhamSortButtonUI();
+            renderPagination('san-pham', count || 0, from, to);
             updateSanPhamSelectionInfo(); 
+            updateFilterButtonTexts('san-pham');
         }
+    } catch (err) {
+        console.error("fetchSanPham unexpected exception:", err);
+        renderSanPhamTable([]);
     } finally {
         if (showLoader) showLoading(false);
     }
@@ -84,31 +349,36 @@ function renderSanPhamTable(data) {
         const html = data.map(sp => {
             const isSelected = viewStates['view-san-pham'].selected.has(sp.ma_vt);
             const imageHtml = sp.url_hinh_anh
-                ? `<img src="${sp.url_hinh_anh}" alt="${sp.ten_vt}" class="w-12 h-12 object-cover rounded-md thumbnail-image" data-large-src="${sp.url_hinh_anh}">`
-                : `<div class="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">...</div>`;
+                ? `<img src="${sp.url_hinh_anh}" alt="${sp.ten_vt || ''}" class="w-10 h-10 object-cover rounded-md thumbnail-image" data-large-src="${sp.url_hinh_anh}">`
+                : `<div class="w-10 h-10 bg-gray-200 rounded-md flex items-center justify-center text-gray-400 text-xs">Ảnh</div>`;
             
-            const tonCuoiText = sp.total_ton_cuoi.toLocaleString();
-            const tonCuoiClass = sp.total_ton_cuoi > 0 ? 'text-green-600' : 'text-red-500';
+            const tonCuoi = typeof sp.total_ton_cuoi === 'number' ? sp.total_ton_cuoi : (Number(sp.total_ton_cuoi) || 0);
+            const tonCuoiText = tonCuoi.toLocaleString();
+            const tonCuoiClass = tonCuoi > 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold';
 
             return `
-                <tr data-id="${sp.ma_vt}" class="cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-100' : ''}">
-                    <td class="px-4 py-1 border border-gray-300 text-center"><input type="checkbox" class="san-pham-select-row" data-id="${sp.ma_vt}" ${isSelected ? 'checked' : ''}></td>
-                    <td class="px-4 py-1 border border-gray-300 flex justify-center items-center">${imageHtml}</td>
-                    <td class="px-6 py-1 text-sm font-medium text-gray-900 border border-gray-300">
-                        <div class="flex justify-between items-center">
-                            <a href="#" data-ma-vt="${sp.ma_vt}" class="san-pham-ma-vt-link text-blue-600 hover:underline">${sp.ma_vt}</a>
-                            <span class="text-xs font-semibold ${tonCuoiClass}">Tồn: ${tonCuoiText}</span>
+                <tr data-id="${sp.ma_vt}" class="cursor-pointer hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-100' : ''}">
+                    <td class="px-1 py-1 border border-gray-300 text-center" data-col="select">
+                        <input type="checkbox" class="san-pham-select-row cursor-pointer" data-id="${sp.ma_vt}" ${isSelected ? 'checked' : ''}>
+                    </td>
+                    <td class="px-2 py-1 border border-gray-300 text-center" data-col="url_hinh_anh">
+                        <div class="flex justify-center items-center">${imageHtml}</div>
+                    </td>
+                    <td class="px-3 py-1 text-sm font-medium text-gray-900 border border-gray-300" data-col="ma_vt">
+                        <div class="flex justify-between items-center gap-2">
+                            <a href="#" data-ma-vt="${sp.ma_vt}" class="san-pham-ma-vt-link text-blue-600 hover:underline font-semibold">${sp.ma_vt}</a>
+                            <span class="text-xs ${tonCuoiClass} whitespace-nowrap bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">Tồn: ${tonCuoiText}</span>
                         </div>
                     </td>
-                    <td class="px-6 py-1 text-sm text-gray-600 break-words border border-gray-300">${sp.ten_vt}</td>
-                    <td class="px-6 py-1 text-sm text-gray-600 border border-gray-300 text-center">${sp.nganh || ''}</td>
-                    <td class="px-6 py-1 text-sm text-gray-600 border border-gray-300 text-center">${sp.phu_trach || ''}</td>
+                    <td class="px-3 py-1 text-sm text-gray-700 break-words border border-gray-300" data-col="ten_vt">${sp.ten_vt || ''}</td>
+                    <td class="px-3 py-1 text-sm text-gray-600 border border-gray-300 text-center" data-col="nganh">${sp.nganh || ''}</td>
+                    <td class="px-3 py-1 text-sm text-gray-600 border border-gray-300 text-center" data-col="phu_trach">${sp.phu_trach || ''}</td>
                 </tr>
             `;
         }).join('');
         spTableBody.innerHTML = html;
     } else {
-        spTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Không có dữ liệu</td></tr>';
+        spTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-500 font-medium">Không có dữ liệu sản phẩm</td></tr>';
     }
 }
 
@@ -135,7 +405,6 @@ function updateSanPhamActionButtonsState() {
 // Biến lưu trữ danh sách duy nhất để dùng cho autocomplete
 let uniqueNganhList = [];
 let uniquePhuTrachList = [];
-// Map lưu trữ quan hệ Ngành -> Phụ trách để gợi ý thông minh
 let nganhOwnerMap = new Map();
 
 async function openSanPhamModal(sp = null) {
@@ -194,16 +463,15 @@ async function openSanPhamModal(sp = null) {
     modal.classList.remove('hidden');
 }
 
-// Hàm xử lý gợi ý cho form
 function setupSanPhamAutocomplete() {
     const nganhInput = document.getElementById('san-pham-modal-nganh');
     const phuTrachInput = document.getElementById('san-pham-modal-phu-trach');
+    if (!nganhInput || !phuTrachInput) return;
 
     const handleNganhSuggest = () => {
         const val = nganhInput.value.toLowerCase();
         const selectedPhuTrach = phuTrachInput.value;
         
-        // Tạo danh sách gợi ý kèm metadata
         let suggestions = uniqueNganhList
             .filter(n => n.toLowerCase().includes(val))
             .map(n => {
@@ -215,7 +483,6 @@ function setupSanPhamAutocomplete() {
                 };
             });
         
-        // Sắp xếp - Ưu tiên các ngành thuộc Phụ Trách đang chọn lên đầu
         suggestions.sort((a, b) => {
             if (a.isOwned && !b.isOwned) return -1;
             if (!a.isOwned && b.isOwned) return 1;
@@ -245,7 +512,6 @@ function setupSanPhamAutocomplete() {
             onSelect: (v) => { 
                 const isChanged = phuTrachInput.value !== v;
                 phuTrachInput.value = v;
-                // YÊU CẦU 2: Reset ô Ngành nếu đổi Phụ trách
                 if (isChanged) {
                     nganhInput.value = '';
                 }
@@ -254,13 +520,11 @@ function setupSanPhamAutocomplete() {
         });
     };
 
-    // YÊU CẦU 1: Hiển thị ngay khi focus (click chuột vào)
     nganhInput.addEventListener('focus', handleNganhSuggest);
     nganhInput.addEventListener('input', debounce(handleNganhSuggest, 200));
 
     phuTrachInput.addEventListener('focus', handlePhuTrachSuggest);
     phuTrachInput.addEventListener('input', (e) => {
-        // Nếu người dùng xóa hoặc gõ thủ công vào ô Phụ trách -> Reset ô Ngành để đảm bảo logic phụ thuộc
         nganhInput.value = '';
         debounce(handlePhuTrachSuggest, 200)();
     });
@@ -280,7 +544,6 @@ async function handleSaveSanPham(e) {
         phu_trach: document.getElementById('san-pham-modal-phu-trach').value.trim()
     };
 
-    // Kiểm tra bắt buộc cho cả 4 trường
     if (!sanPhamData.ma_vt) { showToast("Vui lòng nhập Mã vật tư.", 'error'); return; }
     if (!sanPhamData.ten_vt) { showToast("Vui lòng nhập Tên vật tư.", 'error'); return; }
     if (!sanPhamData.nganh) { showToast("Vui lòng nhập/chọn Ngành.", 'error'); return; }
@@ -399,307 +662,259 @@ async function handleExcelExport() {
         } catch (err) {
             showToast(`Lỗi khi xuất Excel: ${err.message}`, 'error');
         } finally {
-             showLoading(false);
-            }
-        };
-
-        document.getElementById('excel-export-filtered-btn').onclick = () => exportAndClose(false);
-        document.getElementById('excel-export-all-btn').onclick = () => exportAndClose(true);
-        document.getElementById('excel-export-cancel-btn').onclick = () => modal.classList.add('hidden');
-}
-
-async function openFilterPopover(button, view) {
-    const filterKey = button.dataset.filterKey;
-    const state = viewStates[view];
-
-    const template = document.getElementById('filter-popover-template');
-    if (!template) return;
-    const popoverContent = template.content.cloneNode(true);
-    const popover = popoverContent.querySelector('.filter-popover');
-    document.body.appendChild(popover);
-
-    const rect = button.getBoundingClientRect();
-    popover.style.left = `${rect.left}px`;
-    popover.style.top = `${rect.bottom + window.scrollY + 5}px`;
-
-    const optionsList = popover.querySelector('.filter-options-list');
-    const applyBtn = popover.querySelector('.filter-apply-btn');
-    const searchInput = popover.querySelector('.filter-search-input');
-    const selectionCountEl = popover.querySelector('.filter-selection-count');
-    const toggleAllBtn = popover.querySelector('.filter-toggle-all-btn');
-    
-    const tempSelectedOptions = new Set(state.filters[filterKey] || []);
-
-    const updateSelectionCount = () => {
-        const count = tempSelectedOptions.size;
-        selectionCountEl.textContent = count > 0 ? `Đã chọn: ${count}` : '';
-    };
-
-    const updateToggleAllButtonState = () => {
-        const visibleCheckboxes = optionsList.querySelectorAll('.filter-option-cb');
-        if (visibleCheckboxes.length === 0) {
-            toggleAllBtn.textContent = 'Tất cả';
-            toggleAllBtn.disabled = true;
-            return;
-        }
-        toggleAllBtn.disabled = false;
-        const allVisibleSelected = [...visibleCheckboxes].every(cb => cb.checked);
-        toggleAllBtn.textContent = allVisibleSelected ? 'Bỏ chọn' : 'Tất cả';
-    };
-
-    const renderOptions = (options) => {
-        const searchTerm = searchInput.value.toLowerCase();
-        const filteredOptions = options.filter(option => 
-            option && String(option).toLowerCase().includes(searchTerm)
-        );
-
-        if (filteredOptions.length > 0) {
-            optionsList.innerHTML = filteredOptions.map(option => `
-                <label class="flex items-center space-x-2 px-2 py-1 hover:bg-gray-100 rounded">
-                    <input type="checkbox" value="${option}" class="filter-option-cb" ${tempSelectedOptions.has(String(option)) ? 'checked' : ''}>
-                    <span class="text-sm">${option}</span>
-                </label>
-            `).join('');
-        } else {
-             optionsList.innerHTML = '<div class="text-center p-4 text-sm text-gray-500">Không có tùy chọn.</div>';
-        }
-        updateToggleAllButtonState();
-    };
-
-    const setupEventListeners = (allOptions) => {
-        searchInput.addEventListener('input', () => renderOptions(allOptions));
-        
-        optionsList.addEventListener('change', e => {
-            const cb = e.target;
-            if (cb.type === 'checkbox' && cb.classList.contains('filter-option-cb')) {
-                if (cb.checked) {
-                    tempSelectedOptions.add(cb.value);
-                } else {
-                    tempSelectedOptions.delete(cb.value);
-                }
-                updateSelectionCount();
-                updateToggleAllButtonState();
-            }
-        });
-        
-        toggleAllBtn.onclick = () => {
-            const searchTerm = searchInput.value.toLowerCase();
-            const visibleOptions = allOptions.filter(option => 
-                option && String(option).toLowerCase().includes(searchTerm)
-            );
-            
-            const isSelectAllAction = toggleAllBtn.textContent === 'Tất cả';
-            
-            visibleOptions.forEach(option => {
-                if (isSelectAllAction) {
-                    tempSelectedOptions.add(String(option));
-                } else {
-                    tempSelectedOptions.delete(String(option));
-                }
-            });
-
-            renderOptions(allOptions);
-            updateSelectionCount();
-        };
-    };
-
-    updateSelectionCount();
-    
-    optionsList.innerHTML = '<div class="text-center p-4 text-sm text-gray-500">Đang tải...</div>';
-    applyBtn.disabled = true;
-
-    try {
-        const { data, error } = await sb.rpc('get_san_pham_filter_options', {
-            filter_key: filterKey,
-            _ma_vt_filter: state.filters.ma_vt || [],
-            _ten_vt_filter: state.filters.ten_vt || [],
-            _nganh_filter: state.filters.nganh || [],
-            _phu_trach_filter: state.filters.phu_trach || [],
-            _search_term: state.searchTerm || '',
-            _user_role: currentUser.phan_quyen,
-            _user_ho_ten: currentUser.ho_ten
-        });
-        if (error) throw error;
-        
-        const uniqueOptions = Array.isArray(data) ? data.map(item => item.option) : [];
-        renderOptions(uniqueOptions);
-        setupEventListeners(uniqueOptions);
-        applyBtn.disabled = false;
-        
-    } catch (error) {
-        optionsList.innerHTML = '<div class="text-center p-4 text-sm text-red-500">Lỗi tải bộ lọc.</div>';
-        showToast(`Lỗi tải bộ lọc cho ${filterKey}.`, 'error');
-    }
-
-    const closeHandler = (e) => {
-        if (!popover.contains(e.target) && e.target !== button) {
-            popover.remove();
-            document.removeEventListener('click', closeHandler);
+            showLoading(false);
         }
     };
 
-    applyBtn.onclick = () => {
-        state.filters[filterKey] = [...tempSelectedOptions];
-        
-        const defaultText = filterButtonDefaultTexts[button.id] || button.id;
-        button.textContent = tempSelectedOptions.size > 0 ? `${defaultText} (${tempSelectedOptions.size})` : defaultText;
-        
-        if(view === 'view-san-pham') fetchSanPham(1);
-        
-        popover.remove();
-        document.removeEventListener('click', closeHandler);
-    };
-    
-    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    document.getElementById('excel-export-filtered-btn').onclick = () => exportAndClose(false);
+    document.getElementById('excel-export-all-btn').onclick = () => exportAndClose(true);
+    document.getElementById('excel-export-cancel-btn').onclick = () => modal.classList.add('hidden');
 }
 
 export function initSanPhamView() {
     const viewContainer = document.getElementById('view-san-pham');
-    const isAdminOrUser = currentUser.phan_quyen === 'Admin' || currentUser.phan_quyen === 'User';
+    if (!viewContainer) return;
+
+    const role = currentUser?.phan_quyen;
+    const isAdminOrUser = role === 'Admin' || role === 'User';
     viewContainer.querySelectorAll('.sp-admin-only').forEach(el => el.classList.toggle('hidden', !isAdminOrUser));
 
-    // Khởi tạo autocomplete
     setupSanPhamAutocomplete();
 
-    document.getElementById('san-pham-search').addEventListener('input', debounce(() => {
-        viewStates['view-san-pham'].searchTerm = document.getElementById('san-pham-search').value;
-        fetchSanPham(1);
-    }, 500));
+    const table = document.getElementById('san-pham-table');
+    if (table) {
+        applySanPhamColumnOrder(table);
+        initSortableSanPhamColumns(table);
+        initResizableTable(table, 'san_pham_col_widths');
+    }
+    initSanPhamColumnsModal();
+    applySanPhamColumnState();
+    updateSanPhamSortButtonUI();
+
+    const searchInput = document.getElementById('san-pham-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(() => {
+            viewStates['view-san-pham'].searchTerm = searchInput.value;
+            updateFilterButtonTexts('san-pham');
+            fetchSanPham(1);
+        }, 500));
+    }
     
     viewContainer.addEventListener('click', e => {
-        const btn = e.target.closest('.filter-btn');
-        if (btn) openFilterPopover(btn, 'view-san-pham');
-    });
-
-    document.getElementById('san-pham-reset-filters').addEventListener('click', () => {
-        document.getElementById('san-pham-search').value = '';
-        viewStates['view-san-pham'].searchTerm = '';
-        viewStates['view-san-pham'].filters = { ma_vt: [], ten_vt: [], nganh: [], phu_trach: [] };
-        document.querySelectorAll('#view-san-pham .filter-btn').forEach(btn => {
-            btn.textContent = filterButtonDefaultTexts[btn.id];
-        });
-        fetchSanPham(1);
-    });
-
-    document.getElementById('san-pham-table-body').addEventListener('click', e => {
-        if (e.target.closest('.thumbnail-image')) {
-            const imgSrc = e.target.closest('.thumbnail-image').dataset.largeSrc;
-            document.getElementById('image-viewer-img').src = imgSrc;
-            document.getElementById('image-viewer-modal').classList.remove('hidden');
+        const filterBtn = e.target.closest('.filter-btn');
+        if (filterBtn) {
+            e.stopPropagation();
+            openTonKhoFilterPopover(filterBtn, 'view-san-pham');
             return;
         }
 
-        const maVtLink = e.target.closest('.san-pham-ma-vt-link');
-        if (maVtLink) {
-            e.preventDefault();
-            const ma_vt = maVtLink.dataset.maVt;
-            if (ma_vt) {
-                const tonKhoState = viewStates['view-ton-kho'];
-                
-                tonKhoState.searchTerm = '';
-                tonKhoState.filters = { ma_vt: [ma_vt], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
+        const sortBtn = e.target.closest('.sort-btn');
+        if (sortBtn) {
+            e.stopPropagation();
+            const sortKey = sortBtn.dataset.sortKey;
+            if (!sortKey) return;
 
-                tonKhoState.stockAvailability = 'all';
-                sessionStorage.setItem('tonKhoStockAvailability', 'all');
-
-                showView('view-ton-kho');
+            const state = viewStates['view-san-pham'];
+            if (state.sortBy === sortKey) {
+                if (state.sortAsc === true) {
+                    state.sortAsc = false;
+                } else {
+                    state.sortBy = 'ma_vt';
+                    state.sortAsc = true;
+                }
+            } else {
+                state.sortBy = sortKey;
+                state.sortAsc = true;
             }
-            return; 
+            updateSanPhamSortButtonUI();
+            fetchSanPham(1);
+            return;
         }
-
-        const row = e.target.closest('tr');
-        if (!row || !row.dataset.id) return;
-        const id = row.dataset.id;
-        const checkbox = row.querySelector('.san-pham-select-row');
-        if (e.target.type !== 'checkbox') {
-            checkbox.checked = !checkbox.checked;
-        }
-        viewStates['view-san-pham'].selected[checkbox.checked ? 'add' : 'delete'](id);
-        row.classList.toggle('bg-blue-100', checkbox.checked);
-        updateSanPhamActionButtonsState();
-        updateSanPhamSelectionInfo(); 
     });
 
-    document.getElementById('san-pham-select-all').addEventListener('click', (e) => {
-        const isChecked = e.target.checked;
-        document.querySelectorAll('.san-pham-select-row').forEach(cb => {
-            const row = cb.closest('tr');
-            if (row && cb.checked !== isChecked) {
-                 cb.checked = isChecked;
-                 const id = row.dataset.id;
-                 viewStates['view-san-pham'].selected[isChecked ? 'add' : 'delete'](id);
-                 row.classList.toggle('bg-blue-100', isChecked);
+    const resetFiltersBtn = document.getElementById('san-pham-reset-filters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            if (searchInput) searchInput.value = '';
+            viewStates['view-san-pham'].searchTerm = '';
+            viewStates['view-san-pham'].filters = { ma_vt: [], ten_vt: [], nganh: [], phu_trach: [] };
+            viewStates['view-san-pham'].sortBy = 'ma_vt';
+            viewStates['view-san-pham'].sortAsc = true;
+            updateFilterButtonTexts('san-pham');
+            updateSanPhamSortButtonUI();
+            fetchSanPham(1);
+        });
+    }
+
+    const tableBody = document.getElementById('san-pham-table-body');
+    if (tableBody) {
+        tableBody.addEventListener('click', e => {
+            if (e.target.closest('.thumbnail-image')) {
+                const imgSrc = e.target.closest('.thumbnail-image').dataset.largeSrc;
+                const viewerImg = document.getElementById('image-viewer-img');
+                const viewerModal = document.getElementById('image-viewer-modal');
+                if (viewerImg) viewerImg.src = imgSrc;
+                if (viewerModal) viewerModal.classList.remove('hidden');
+                return;
+            }
+
+            const maVtLink = e.target.closest('.san-pham-ma-vt-link');
+            if (maVtLink) {
+                e.preventDefault();
+                const ma_vt = maVtLink.dataset.maVt;
+                if (ma_vt) {
+                    const tonKhoState = viewStates['view-ton-kho'];
+                    tonKhoState.searchTerm = '';
+                    tonKhoState.filters = { ma_vt: [ma_vt], lot: [], date: [], tinh_trang: [], nganh: [], phu_trach: [] };
+                    tonKhoState.stockAvailability = 'all';
+                    sessionStorage.setItem('tonKhoStockAvailability', 'all');
+                    showView('view-ton-kho');
+                }
+                return; 
+            }
+
+            const row = e.target.closest('tr');
+            if (!row || !row.dataset.id) return;
+            const id = row.dataset.id;
+            const checkbox = row.querySelector('.san-pham-select-row');
+            if (checkbox) {
+                if (e.target.type !== 'checkbox') {
+                    checkbox.checked = !checkbox.checked;
+                }
+                viewStates['view-san-pham'].selected[checkbox.checked ? 'add' : 'delete'](id);
+                row.classList.toggle('bg-blue-100', checkbox.checked);
+                updateSanPhamActionButtonsState();
+                updateSanPhamSelectionInfo(); 
             }
         });
-        updateSanPhamActionButtonsState();
-        updateSanPhamSelectionInfo(); 
-    });
+    }
+
+    const selectAllCb = document.getElementById('san-pham-select-all');
+    if (selectAllCb) {
+        selectAllCb.addEventListener('click', (e) => {
+            const isChecked = e.target.checked;
+            document.querySelectorAll('.san-pham-select-row').forEach(cb => {
+                const row = cb.closest('tr');
+                if (row && cb.checked !== isChecked) {
+                     cb.checked = isChecked;
+                     const id = row.dataset.id;
+                     viewStates['view-san-pham'].selected[isChecked ? 'add' : 'delete'](id);
+                     row.classList.toggle('bg-blue-100', isChecked);
+                }
+            });
+            updateSanPhamActionButtonsState();
+            updateSanPhamSelectionInfo(); 
+        });
+    }
     
-    document.getElementById('san-pham-btn-add').addEventListener('click', () => openSanPhamModal());
-    document.getElementById('san-pham-btn-edit').addEventListener('click', async () => {
-        const ma_vt = [...viewStates['view-san-pham'].selected][0];
-        const { data } = await sb.from('san_pham').select('*').eq('ma_vt', ma_vt).single();
-        if(data) openSanPhamModal(data);
-    });
-    document.getElementById('san-pham-btn-delete').addEventListener('click', handleDeleteMultipleSanPham);
-    document.getElementById('san-pham-btn-excel').addEventListener('click', handleExcelExport);
-    document.getElementById('san-pham-form').addEventListener('submit', handleSaveSanPham);
-    document.getElementById('cancel-san-pham-btn').addEventListener('click', () => 
-        document.getElementById('san-pham-modal').classList.add('hidden'));
+    const addBtn = document.getElementById('san-pham-btn-add');
+    if (addBtn) addBtn.addEventListener('click', () => openSanPhamModal());
+
+    const editBtn = document.getElementById('san-pham-btn-edit');
+    if (editBtn) {
+        editBtn.addEventListener('click', async () => {
+            const ma_vt = [...viewStates['view-san-pham'].selected][0];
+            if (!ma_vt) return;
+            const { data } = await sb.from('san_pham').select('*').eq('ma_vt', ma_vt).single();
+            if (data) openSanPhamModal(data);
+        });
+    }
+
+    const deleteBtn = document.getElementById('san-pham-btn-delete');
+    if (deleteBtn) deleteBtn.addEventListener('click', handleDeleteMultipleSanPham);
+
+    const excelBtn = document.getElementById('san-pham-btn-excel');
+    if (excelBtn) excelBtn.addEventListener('click', handleExcelExport);
+
+    const spForm = document.getElementById('san-pham-form');
+    if (spForm) spForm.addEventListener('submit', handleSaveSanPham);
+
+    const cancelSpBtn = document.getElementById('cancel-san-pham-btn');
+    if (cancelSpBtn) {
+        cancelSpBtn.addEventListener('click', () => {
+            const spModal = document.getElementById('san-pham-modal');
+            if (spModal) spModal.classList.add('hidden');
+        });
+    }
     
-    document.getElementById('san-pham-items-per-page').addEventListener('change', (e) => {
-        viewStates['view-san-pham'].itemsPerPage = parseInt(e.target.value, 10);
-        fetchSanPham(1);
-    });
-    document.getElementById('san-pham-prev-page').addEventListener('click', () => fetchSanPham(viewStates['view-san-pham'].currentPage - 1));
-    document.getElementById('san-pham-next-page').addEventListener('click', () => fetchSanPham(viewStates['view-san-pham'].currentPage + 1));
+    const itemsPerPageEl = document.getElementById('san-pham-items-per-page');
+    if (itemsPerPageEl) {
+        itemsPerPageEl.addEventListener('change', (e) => {
+            viewStates['view-san-pham'].itemsPerPage = parseInt(e.target.value, 10);
+            fetchSanPham(1);
+        });
+    }
+
+    const prevPageBtn = document.getElementById('san-pham-prev-page');
+    if (prevPageBtn) prevPageBtn.addEventListener('click', () => fetchSanPham(viewStates['view-san-pham'].currentPage - 1));
+
+    const nextPageBtn = document.getElementById('san-pham-next-page');
+    if (nextPageBtn) nextPageBtn.addEventListener('click', () => fetchSanPham(viewStates['view-san-pham'].currentPage + 1));
     
     const pageInput = document.getElementById('san-pham-page-input');
-    const handlePageJump = () => {
-        const state = viewStates['view-san-pham'];
-        let targetPage = parseInt(pageInput.value, 10);
-        const totalPages = Math.ceil(state.totalFilteredCount / state.itemsPerPage);
+    if (pageInput) {
+        const handlePageJump = () => {
+            const state = viewStates['view-san-pham'];
+            let targetPage = parseInt(pageInput.value, 10);
+            const totalPages = Math.ceil(state.totalFilteredCount / state.itemsPerPage);
 
-        if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
-        else if (targetPage > totalPages && totalPages > 0) targetPage = totalPages;
-        else if (totalPages === 0) targetPage = 1;
-        
-        pageInput.value = targetPage;
-        if (targetPage !== state.currentPage) fetchSanPham(targetPage);
-    };
-    pageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }
-    });
-    pageInput.addEventListener('change', handlePageJump);
+            if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
+            else if (targetPage > totalPages && totalPages > 0) targetPage = totalPages;
+            else if (totalPages === 0) targetPage = 1;
+            
+            pageInput.value = targetPage;
+            if (targetPage !== state.currentPage) fetchSanPham(targetPage);
+        };
+        pageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); handlePageJump(); e.target.blur(); }
+        });
+        pageInput.addEventListener('change', handlePageJump);
+    }
     
     const processSpImageFile = (file) => {
         if (file && file.type.startsWith('image/')) {
             selectedSanPhamImageFile = file;
             const reader = new FileReader();
             reader.onload = (e) => {
-                document.getElementById('san-pham-modal-image-preview').src = e.target.result;
-                document.getElementById('san-pham-modal-remove-image-btn').classList.remove('hidden');
-                document.getElementById('san-pham-modal-hinh-anh-url-hien-tai').value = 'temp-new-image';
+                const preview = document.getElementById('san-pham-modal-image-preview');
+                const removeBtn = document.getElementById('san-pham-modal-remove-image-btn');
+                const urlInput = document.getElementById('san-pham-modal-hinh-anh-url-hien-tai');
+                if (preview) preview.src = e.target.result;
+                if (removeBtn) removeBtn.classList.remove('hidden');
+                if (urlInput) urlInput.value = 'temp-new-image';
             };
             reader.readAsDataURL(file);
         }
     };
-    document.getElementById('san-pham-modal-image-upload').addEventListener('change', (e) => processSpImageFile(e.target.files[0]));
-    document.getElementById('san-pham-image-paste-area').addEventListener('paste', (e) => {
-        e.preventDefault();
-        const items = e.clipboardData.items;
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                processSpImageFile(items[i].getAsFile());
-                return;
+
+    const imageUploadInput = document.getElementById('san-pham-modal-image-upload');
+    if (imageUploadInput) imageUploadInput.addEventListener('change', (e) => processSpImageFile(e.target.files[0]));
+
+    const imagePasteArea = document.getElementById('san-pham-image-paste-area');
+    if (imagePasteArea) {
+        imagePasteArea.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    processSpImageFile(items[i].getAsFile());
+                    return;
+                }
             }
-        }
-    });
-    document.getElementById('san-pham-modal-remove-image-btn').addEventListener('click', () => {
-        selectedSanPhamImageFile = null;
-        document.getElementById('san-pham-modal-image-upload').value = '';
-        document.getElementById('san-pham-modal-image-preview').src = PLACEHOLDER_IMAGE_URL;
-        document.getElementById('san-pham-modal-remove-image-btn').classList.add('hidden');
-        document.getElementById('san-pham-modal-hinh-anh-url-hien-tai').value = '';
-    });
+        });
+    }
+
+    const removeImageBtn = document.getElementById('san-pham-modal-remove-image-btn');
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', () => {
+            selectedSanPhamImageFile = null;
+            const uploadEl = document.getElementById('san-pham-modal-image-upload');
+            const previewEl = document.getElementById('san-pham-modal-image-preview');
+            const urlInputEl = document.getElementById('san-pham-modal-hinh-anh-url-hien-tai');
+            if (uploadEl) uploadEl.value = '';
+            if (previewEl) previewEl.src = PLACEHOLDER_IMAGE_URL;
+            removeImageBtn.classList.add('hidden');
+            if (urlInputEl) urlInputEl.value = '';
+        });
+    }
 }

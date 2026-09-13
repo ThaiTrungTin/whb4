@@ -156,13 +156,74 @@ async function openTongQuanFilterPopover(button) {
 }
 
 
+function parseUniversalDate(dateString) {
+    if (!dateString) return null;
+    const str = String(dateString).trim();
+    if (!str) return null;
+    
+    // Match DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
+    if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10);
+        const year = parseInt(dmyMatch[3], 10);
+        const d = new Date(year, month - 1, day);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    
+    // Match YYYY-MM-DD or YYYY/MM/DD
+    const ymdMatch = str.match(/^(\d{4})[\/\.\-](\d{1,2})[\/\.\-](\d{1,2})$/);
+    if (ymdMatch) {
+        const year = parseInt(ymdMatch[1], 10);
+        const month = parseInt(ymdMatch[2], 10);
+        const day = parseInt(ymdMatch[3], 10);
+        const d = new Date(year, month - 1, day);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    const fallbackDate = new Date(str);
+    return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+}
+
+function calculateItemStatus(item, today) {
+    if (item.tinh_trang === 'Hàng hư') return 'Hàng hư';
+    
+    const expiryDate = parseUniversalDate(item.date);
+    if (!expiryDate) {
+        if (item.tinh_trang && item.tinh_trang !== 'Còn sử dụng' && item.tinh_trang !== 'Cận date') {
+            return item.tinh_trang;
+        }
+        return 'Không có date';
+    }
+    
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 0) {
+        return 'Hết hạn sử dụng';
+    } else if (diffDays <= 30) {
+        return 'Từ 1-30 ngày';
+    } else if (diffDays <= 60) {
+        return 'Từ 31-60 ngày';
+    } else if (diffDays <= 90) {
+        return 'Từ 61-90 ngày';
+    } else if (diffDays <= 120) {
+        return 'Từ 91-120 ngày';
+    } else if (diffDays <= 150) {
+        return 'Từ 121-150 ngày';
+    } else if (diffDays <= 180) {
+        return 'Từ 151-180 ngày';
+    } else {
+        return 'Trên 180 ngày';
+    }
+}
+
 async function fetchAlerts() {
     const isViewRole = currentUser.phan_quyen === 'View';
     const userName = currentUser.ho_ten;
     const lowStockThreshold = 10;
     const slowMovingDays = 60;
     const overdueDays = 3;
-    const urgentExpiryDays = 30;
 
     const sixtyDaysAgo = new Date();
     sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - slowMovingDays);
@@ -172,12 +233,10 @@ async function fetchAlerts() {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(today.getDate() + urgentExpiryDays);
 
     // 1 & 2. Data for Low Stock & Slow Moving Items
     let allStockQuery = sb.from('ton_kho_update')
-        .select('ma_vach, ma_vt, ten_vt, ton_cuoi, nganh, phu_trach')
+        .select('ma_vach, ma_vt, ten_vt, lot, date, ton_cuoi, nganh, phu_trach, tinh_trang')
         .gt('ton_cuoi', 0);
         
     // Sub-query for Slow Moving
@@ -185,12 +244,6 @@ async function fetchAlerts() {
         .select('ma_vach')
         .eq('loai', 'Xuat')
         .gte('thoi_gian', sixtyDaysAgo.toISOString());
-        
-    // 3. Urgent Expiry
-    let urgentExpiryQuery = sb.from('ton_kho_update')
-        .select('ma_vt, ten_vt, lot, date, nganh, phu_trach')
-        .eq('tinh_trang', 'Cận date')
-        .gt('ton_cuoi', 0);
 
     // 4. Overdue Orders
     let overdueOrdersQuery = sb.from('don_hang')
@@ -202,25 +255,24 @@ async function fetchAlerts() {
 
     if (isViewRole) {
         allStockQuery = allStockQuery.eq('phu_trach', userName);
-        urgentExpiryQuery = urgentExpiryQuery.eq('phu_trach', userName);
         overdueOrdersQuery = overdueOrdersQuery.eq('yeu_cau', userName);
     }
     
     const [
         allStockRes,
         recentMovementRes,
-        urgentExpiryRes,
         overdueOrdersRes
     ] = await Promise.all([
         allStockQuery,
         recentMovementQuery,
-        urgentExpiryQuery,
         overdueOrdersQuery
     ]);
 
+    const allStockItems = allStockRes.data || [];
+
     // Process Low Stock
     const stockByProduct = new Map();
-    (allStockRes.data || []).forEach(item => {
+    allStockItems.forEach(item => {
         if (!stockByProduct.has(item.ma_vt)) {
             stockByProduct.set(item.ma_vt, {
                 ma_vt: item.ma_vt,
@@ -230,7 +282,7 @@ async function fetchAlerts() {
                 total_ton_cuoi: 0,
             });
         }
-        stockByProduct.get(item.ma_vt).total_ton_cuoi += item.ton_cuoi;
+        stockByProduct.get(item.ma_vt).total_ton_cuoi += (item.ton_cuoi || 0);
     });
 
     const lowStockItems = [...stockByProduct.values()].filter(
@@ -239,20 +291,13 @@ async function fetchAlerts() {
 
     // Process Slow Moving
     const recentlyMovedMaVach = new Set((recentMovementRes.data || []).map(i => i.ma_vach));
-    const slowMovingItems = (allStockRes.data || []).filter(item => !recentlyMovedMaVach.has(item.ma_vach)).slice(0, 5);
+    const slowMovingItems = allStockItems.filter(item => !recentlyMovedMaVach.has(item.ma_vach)).slice(0, 5);
     
-    // Process Urgent Expiry
-    const parseDate = (dateString) => {
-        if (!dateString || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return null;
-        const [day, month, year] = dateString.split('/').map(Number);
-        const date = new Date(year, month - 1, day);
-        return isNaN(date.getTime()) ? null : date;
-    };
-
-    const urgentExpiryItems = (urgentExpiryRes.data || []).filter(item => {
-        const expiryDate = parseDate(item.date);
-        return expiryDate && expiryDate >= today && expiryDate <= sevenDaysFromNow;
-    }).slice(0, 5);
+    // Process Urgent Expiry (sắp hết hạn từ 1-30 ngày hoặc 31-60 ngày)
+    const urgentExpiryItems = allStockItems.filter(item => {
+        const st = calculateItemStatus(item, today);
+        return st === 'Từ 1-30 ngày' || st === 'Từ 31-60 ngày';
+    }).slice(0, 10);
 
     return {
         lowStock: lowStockItems,
@@ -447,7 +492,7 @@ async function renderInventoryStatusChart() {
 
     const selectedNganhArr = tongQuanState.inventory.nganh;
 
-    let query = sb.from('ton_kho_update').select('tinh_trang, ton_cuoi');
+    let query = sb.from('ton_kho_update').select('tinh_trang, ton_cuoi, date');
     if (currentUser.phan_quyen === 'View') {
         query = query.eq('phu_trach', currentUser.ho_ten);
     }
@@ -461,21 +506,56 @@ async function renderInventoryStatusChart() {
         return;
     }
     
-    const labels = ['Còn sử dụng', 'Cận date', 'Hết hạn sử dụng', 'Hàng hư'];
-    const statusCounts = {
-        'Còn sử dụng': 0,
-        'Cận date': 0,
-        'Hết hạn sử dụng': 0,
-        'Hàng hư': 0
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allOrderedLabels = [
+        'Hết hạn sử dụng',
+        'Từ 1-30 ngày',
+        'Từ 31-60 ngày',
+        'Từ 61-90 ngày',
+        'Từ 91-120 ngày',
+        'Từ 121-150 ngày',
+        'Từ 151-180 ngày',
+        'Trên 180 ngày',
+        'Không có date',
+        'Hàng hư'
+    ];
+
+    const colorConfig = {
+        'Hết hạn sử dụng': { bg: '#dc2626', border: '#b91c1c' },   // Đỏ đậm
+        'Từ 1-30 ngày':    { bg: '#e11d48', border: '#be123c' },   // Đỏ hồng (Rose)
+        'Từ 31-60 ngày':   { bg: '#ea580c', border: '#c2410c' },   // Cam đậm
+        'Từ 61-90 ngày':   { bg: '#f97316', border: '#ea580c' },   // Cam
+        'Từ 91-120 ngày':  { bg: '#f59e0b', border: '#d97706' },   // Vàng cam (Amber)
+        'Từ 121-150 ngày': { bg: '#eab308', border: '#ca8a04' },   // Vàng đậm
+        'Từ 151-180 ngày': { bg: '#fde047', border: '#eab308' },   // Vàng chanh nhạt
+        'Trên 180 ngày':   { bg: '#16a34a', border: '#15803d' },   // Xanh lá cây
+        'Không có date':   { bg: '#94a3b8', border: '#64748b' },   // Xám
+        'Hàng hư':         { bg: '#9333ea', border: '#7e22ce' }    // Tím
     };
 
+    const statusCounts = {};
+    allOrderedLabels.forEach(label => { statusCounts[label] = 0; });
+
     (data || []).forEach(item => {
-        if (statusCounts.hasOwnProperty(item.tinh_trang)) {
-            statusCounts[item.tinh_trang] += (item.ton_cuoi || 0);
+        const tonCuoi = item.ton_cuoi || 0;
+        if (tonCuoi > 0) {
+            const status = calculateItemStatus(item, today);
+            if (statusCounts.hasOwnProperty(status)) {
+                statusCounts[status] += tonCuoi;
+            } else {
+                statusCounts['Không có date'] = (statusCounts['Không có date'] || 0) + tonCuoi;
+            }
         }
     });
 
-    const chartData = labels.map(label => statusCounts[label]);
+    // Chỉ lấy các label có số lượng > 0 để hiển thị biểu đồ trực quan, rõ ràng
+    const activeLabels = allOrderedLabels.filter(label => statusCounts[label] > 0);
+    const labelsToUse = activeLabels.length > 0 ? activeLabels : ['Không có tồn kho'];
+    const chartData = activeLabels.length > 0 ? labelsToUse.map(label => statusCounts[label]) : [0];
+    const backgroundColors = activeLabels.length > 0 ? labelsToUse.map(label => colorConfig[label]?.bg || '#94a3b8') : ['#e2e8f0'];
+    const borderColors = activeLabels.length > 0 ? labelsToUse.map(label => colorConfig[label]?.border || '#64748b') : ['#cbd5e1'];
 
     if (inventoryStatusChart) {
         inventoryStatusChart.destroy();
@@ -484,23 +564,14 @@ async function renderInventoryStatusChart() {
     inventoryStatusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
+            labels: labelsToUse,
             datasets: [{
                 label: 'Số Lượng',
                 data: chartData,
-                backgroundColor: [
-                    'rgba(49, 209, 52, 0.93)',  // Green for Còn sử dụng
-                    'rgba(54, 162, 235, 0.7)',  // Blue for Cận date
-                    'rgba(251, 3, 3, 0.7)',   // Red for Hết hạn sử dụng
-                    'rgba(242, 242, 8, 1)'   // Yellow for Hàng hư
-                ],
-                borderColor: [
-                    'rgba(49, 209, 52, 0.93)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(251, 3, 3, 0.7)',
-                    'rgba(242, 242, 8, 1)'
-                ],
-                borderWidth: 1
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                hoverOffset: 6
             }]
         },
         options: {
@@ -509,6 +580,13 @@ async function renderInventoryStatusChart() {
             plugins: {
                 legend: {
                     position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 8,
+                        font: {
+                            size: 11
+                        }
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -518,9 +596,28 @@ async function renderInventoryStatusChart() {
                                 label += ': ';
                             }
                             if (context.parsed !== null) {
-                                label += context.parsed.toLocaleString();
+                                label += context.parsed.toLocaleString() + ' SP';
                             }
                             return label;
+                        }
+                    }
+                }
+            },
+            cutout: '58%',
+            onClick: (event, elements) => {
+                if (elements && elements.length > 0) {
+                    const index = elements[0].index;
+                    const clickedStatus = labelsToUse[index];
+                    if (clickedStatus && clickedStatus !== 'Không có tồn kho') {
+                        const state = viewStates['view-ton-kho'];
+                        if (state) {
+                            state.searchTerm = '';
+                            state.currentPage = 1;
+                            Object.keys(state.filters).forEach(k => { state.filters[k] = []; });
+                            state.filters.tinh_trang = [clickedStatus];
+                            state.stockAvailability = 'available';
+                            sessionStorage.setItem('tonKhoStockAvailability', 'available');
+                            showView('view-ton-kho');
                         }
                     }
                 }
@@ -783,30 +880,26 @@ export async function fetchTongQuanData() {
         document.getElementById('tq-stat-san-pham').textContent = totalSanPhamCount.toLocaleString();
         document.getElementById('tq-sub-stat-san-pham').innerHTML = `<span class="text-gray-500">Khả dụng:</span> ${khaDungStock.toLocaleString()}`;
 
-        // -- Card 3: Cận Date --
-        const canDateItems = allStockItems.filter(item => item.tinh_trang === 'Cận date' && item.ton_cuoi > 0);
+        const todayForExpiry = new Date(); 
+        todayForExpiry.setHours(0,0,0,0);
+
+        // -- Card 3: Cận Date (1-30 ngày và 31-60 ngày) --
+        const canDateItems = allStockItems.filter(item => {
+            const st = calculateItemStatus(item, todayForExpiry);
+            return (item.ton_cuoi || 0) > 0 && (st === 'Từ 1-30 ngày' || st === 'Từ 31-60 ngày');
+        });
         const canDateProductCount = new Set(canDateItems.map(i => i.ma_vt)).size;
-        const canDateQuantity = canDateItems.reduce((sum, i) => sum + i.ton_cuoi, 0);
+        const canDateQuantity = canDateItems.reduce((sum, i) => sum + (i.ton_cuoi || 0), 0);
         document.getElementById('tq-stat-can-date').textContent = `${canDateProductCount} mặt hàng`;
         document.getElementById('tq-sub-stat-can-date').innerHTML = `<span class="text-gray-500">Số lượng:</span> ${canDateQuantity.toLocaleString()}`;
 
-        // -- Card 4: Hết Hạn this month --
-        const parseDate = (dateString) => {
-            if (!dateString || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return null;
-            const [day, month, year] = dateString.split('/').map(Number);
-            return new Date(year, month - 1, day);
-        };
-        const todayForExpiry = new Date(); 
-        todayForExpiry.setHours(0,0,0,0);
-        const currentMonth = todayForExpiry.getMonth();
-        const currentYear = todayForExpiry.getFullYear();
-        
+        // -- Card 4: Hết Hạn --
         const hetHanItems = allStockItems.filter(item => {
-            const expiryDate = parseDate(item.date);
-            return expiryDate && expiryDate.getMonth() === currentMonth && expiryDate.getFullYear() === currentYear && expiryDate <= todayForExpiry;
+            const st = calculateItemStatus(item, todayForExpiry);
+            return (item.ton_cuoi || 0) > 0 && st === 'Hết hạn sử dụng';
         });
         const hetHanProductCount = new Set(hetHanItems.map(i => i.ma_vt)).size;
-        const hetHanQuantity = hetHanItems.reduce((sum, i) => sum + i.ton_cuoi, 0);
+        const hetHanQuantity = hetHanItems.reduce((sum, i) => sum + (i.ton_cuoi || 0), 0);
         document.getElementById('tq-stat-het-han').textContent = `${hetHanProductCount} mặt hàng`;
         document.getElementById('tq-sub-stat-het-han').innerHTML = `<span class="text-gray-500">Số lượng:</span> ${hetHanQuantity.toLocaleString()}`;
         
@@ -913,11 +1006,11 @@ export function initTongQuanView() {
                  showView('view-ton-kho');
                 return;
             }
-            if (cardCanDate && currentStats.canDateLo > 0) {
-                resetAndShow('view-ton-kho', { tinh_trang: ['Cận date'] });
+            if (cardCanDate) {
+                resetAndShow('view-ton-kho', { tinh_trang: ['Từ 1-30 ngày', 'Từ 31-60 ngày'] });
                 return;
             }
-            if (cardHetHan && currentStats.hetHanLo > 0) {
+            if (cardHetHan) {
                 resetAndShow('view-ton-kho', { tinh_trang: ['Hết hạn sử dụng'] });
                 return;
             }
